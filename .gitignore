@@ -16,20 +16,21 @@ dist/
 .vscode/
 .idea/
 *.sublime*
-# Configs locales
+
 config.json
-# Bytecode compilado y artefactos de PyInstaller
+
 pyinstaller*/
 *.pyc
 *.pyo
-# Carpeta de mods generada o temporal
+
 Mods/
 tmp/
-# Archivos temporales de ejecución
+
 *.pyd
 *.orig
-# Otros
+
 .env
 .env.*
-# Sistema
+
 Thumbs.db
+mod_data_tmp.json
