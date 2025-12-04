@@ -1,0 +1,454 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Input;
+using IEVRModManager.Managers;
+using IEVRModManager.Models;
+using IEVRModManager.Windows;
+
+namespace IEVRModManager
+{
+    public partial class MainWindow : Window
+    {
+        private readonly ConfigManager _configManager;
+        private readonly ModManager _modManager;
+        private readonly ViolaIntegration _viola;
+        private ObservableCollection<ModEntryViewModel> _modEntries;
+        private AppConfig _config = null!;
+
+        public MainWindow()
+        {
+            InitializeComponent();
+            
+            _configManager = new ConfigManager();
+            _modManager = new ModManager();
+            _viola = new ViolaIntegration(message => Log(message, "info"));
+            _modEntries = new ObservableCollection<ModEntryViewModel>();
+            
+            ModsListView.ItemsSource = _modEntries;
+            
+            LoadConfig();
+            ScanMods();
+            CleanupTempDir();
+        }
+
+        private void LoadConfig()
+        {
+            _config = _configManager.Load();
+        }
+
+        private void SaveConfig()
+        {
+            var modData = _modEntries.Select(me => new ModData
+            {
+                Name = me.Name,
+                Enabled = me.Enabled
+            }).ToList();
+
+            var success = _configManager.Save(
+                _config.GamePath,
+                _config.CfgBinPath,
+                _config.ViolaCliPath,
+                _config.TmpDir,
+                _modEntries.Select(me => new ModEntry
+                {
+                    Name = me.Name,
+                    Path = Config.DefaultModsDir,
+                    Enabled = me.Enabled,
+                    DisplayName = me.DisplayName,
+                    Author = me.Author,
+                    ModVersion = me.ModVersion,
+                    GameVersion = me.GameVersion
+                }).ToList()
+            );
+
+            if (!success)
+            {
+                MessageBox.Show("Could not save configuration.", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                Log("Could not save configuration.", "error");
+            }
+        }
+
+        private void ScanMods()
+        {
+            var savedMods = _config?.Mods ?? new List<ModData>();
+            var existingEntries = _modEntries.Select(me => new ModEntry
+            {
+                Name = me.Name,
+                Path = Config.DefaultModsDir,
+                Enabled = me.Enabled,
+                DisplayName = me.DisplayName,
+                Author = me.Author,
+                ModVersion = me.ModVersion,
+                GameVersion = me.GameVersion
+            }).ToList();
+
+            var scannedMods = _modManager.ScanMods(savedMods, existingEntries);
+            
+            _modEntries.Clear();
+            foreach (var mod in scannedMods)
+            {
+                _modEntries.Add(new ModEntryViewModel(mod));
+            }
+            
+            SaveConfig();
+        }
+
+        private void ScanMods_Click(object sender, RoutedEventArgs e)
+        {
+            ScanMods();
+        }
+
+        private void ModsListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (ModsListView.SelectedItem is ModEntryViewModel selected)
+            {
+                selected.Enabled = !selected.Enabled;
+                SaveConfig();
+            }
+        }
+
+        private void ModsListView_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            // Handle selection change if needed
+        }
+
+        private void MoveUp_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedIndex = ModsListView.SelectedIndex;
+            if (selectedIndex <= 0) return;
+
+            var item = _modEntries[selectedIndex];
+            _modEntries.RemoveAt(selectedIndex);
+            _modEntries.Insert(selectedIndex - 1, item);
+            ModsListView.SelectedIndex = selectedIndex - 1;
+            SaveConfig();
+        }
+
+        private void MoveDown_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedIndex = ModsListView.SelectedIndex;
+            if (selectedIndex < 0 || selectedIndex >= _modEntries.Count - 1) return;
+
+            var item = _modEntries[selectedIndex];
+            _modEntries.RemoveAt(selectedIndex);
+            _modEntries.Insert(selectedIndex + 1, item);
+            ModsListView.SelectedIndex = selectedIndex + 1;
+            SaveConfig();
+        }
+
+        private void EnableAll_Click(object sender, RoutedEventArgs e)
+        {
+            foreach (var mod in _modEntries)
+            {
+                mod.Enabled = true;
+            }
+            SaveConfig();
+        }
+
+        private void DisableAll_Click(object sender, RoutedEventArgs e)
+        {
+            foreach (var mod in _modEntries)
+            {
+                mod.Enabled = false;
+            }
+            SaveConfig();
+        }
+
+        private async void ApplyMods_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viola.IsRunning)
+            {
+                MessageBox.Show("A process is already running.", "Info", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            // Validate paths
+            if (string.IsNullOrWhiteSpace(_config.GamePath) || !Directory.Exists(_config.GamePath))
+            {
+                MessageBox.Show("Invalid game path.", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_config.CfgBinPath) || !File.Exists(_config.CfgBinPath))
+            {
+                MessageBox.Show("Invalid cpk_list.cfg.bin path.", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_config.ViolaCliPath) || !File.Exists(_config.ViolaCliPath))
+            {
+                MessageBox.Show("violacli.exe not found. Please configure its path.", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            // Get enabled mods
+            var modEntries = _modEntries.Select(me => new ModEntry
+            {
+                Name = me.Name,
+                Path = Config.DefaultModsDir,
+                Enabled = me.Enabled,
+                DisplayName = me.DisplayName,
+                Author = me.Author,
+                ModVersion = me.ModVersion,
+                GameVersion = me.GameVersion
+            }).ToList();
+
+            var enabledMods = _modManager.GetEnabledMods(modEntries);
+
+            // If no mods enabled, restore original cpk_list.cfg.bin
+            if (enabledMods.Count == 0)
+            {
+                var targetCpk = Path.Combine(_config.GamePath, "data", "cpk_list.cfg.bin");
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(targetCpk)!);
+                    File.Copy(_config.CfgBinPath, targetCpk, true);
+                    Log("CHANGES APPLIED!! No mods selected.", "success");
+                    
+                    // Mostrar popup cuando no hay mods
+                    var successWindow = new SuccessMessageWindow(this, "Original game files restored.\nNo mods were active.");
+                    successWindow.ShowDialog();
+                }
+                catch (Exception ex)
+                {
+                    Log($"Error applying changes: {ex.Message}", "error");
+                }
+                return;
+            }
+
+            // Merge mods
+            var tmpRoot = Path.GetFullPath(_config.TmpDir);
+            Directory.CreateDirectory(tmpRoot);
+
+            // Run merge in background
+            await Task.Run(async () =>
+            {
+                await RunMergeAndCopy(_config.ViolaCliPath, _config.CfgBinPath, 
+                    enabledMods, tmpRoot, _config.GamePath);
+            });
+        }
+
+        private async Task RunMergeAndCopy(string violaCli, string cfgBin, 
+            List<string> modPaths, string tmpRoot, string gamePath)
+        {
+            try
+            {
+                // Merge mods
+                var success = await _viola.MergeModsAsync(violaCli, cfgBin, modPaths, tmpRoot);
+                
+                if (!success)
+                {
+                    Dispatcher.Invoke(() => Log("violacli returned error; aborting copy.", "error"));
+                    return;
+                }
+
+                // Copy merged files
+                var tmpData = Path.Combine(tmpRoot, "data");
+                var destData = Path.Combine(gamePath, "data");
+
+                if (_viola.CopyMergedFiles(tmpData, destData))
+                {
+                    _viola.CleanupTemp(tmpData);
+                    Dispatcher.Invoke(() => Log("MODS APPLIED!!", "success"));
+                    
+                    // Obtener nombres de mods aplicados en orden
+                    // Crear un diccionario para búsqueda rápida por nombre de carpeta
+                    var modNameMap = _modEntries.ToDictionary(
+                        me => Path.GetFullPath(Path.Combine(Config.DefaultModsDir, me.Name)),
+                        me => me.DisplayName);
+                    
+                    var modNames = modPaths.Select(path =>
+                    {
+                        var fullPath = Path.GetFullPath(path);
+                        return modNameMap.TryGetValue(fullPath, out var displayName) 
+                            ? displayName 
+                            : Path.GetFileName(path);
+                    }).ToList();
+                    
+                    // Mostrar popup de éxito
+                    var modCount = modPaths.Count;
+                    var message = modCount == 1 
+                        ? "1 Mod Applied Successfully" 
+                        : $"{modCount} Mods Applied Successfully";
+                    
+                    Dispatcher.Invoke(() =>
+                    {
+                        var successWindow = new SuccessMessageWindow(this, message, modNames);
+                        successWindow.ShowDialog();
+                    });
+                }
+                else
+                {
+                    Dispatcher.Invoke(() => Log("Failed to copy merged files.", "error"));
+                }
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => Log($"Unexpected error: {ex.Message}", "error"));
+            }
+        }
+
+        private void OpenModsFolder_Click(object sender, RoutedEventArgs e)
+        {
+            var path = Path.GetFullPath(Config.DefaultModsDir);
+            if (Directory.Exists(path))
+            {
+                System.Diagnostics.Process.Start("explorer.exe", path);
+            }
+            else
+            {
+                MessageBox.Show($"{path} does not exist", "Info", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        private void Downloads_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new DownloadsWindow(this);
+            window.ShowDialog();
+        }
+
+        private void Configuration_Click(object sender, RoutedEventArgs e)
+        {
+            // Crear una copia de la configuración para la ventana
+            var configCopy = new AppConfig
+            {
+                GamePath = _config.GamePath,
+                CfgBinPath = _config.CfgBinPath,
+                ViolaCliPath = _config.ViolaCliPath,
+                TmpDir = _config.TmpDir,
+                Mods = _config.Mods
+            };
+            
+            var window = new ConfigPathsWindow(this, configCopy, () =>
+            {
+                // Guardar cuando cambia algo
+                _config.GamePath = configCopy.GamePath;
+                _config.CfgBinPath = configCopy.CfgBinPath;
+                _config.ViolaCliPath = configCopy.ViolaCliPath;
+                SaveConfig();
+            });
+            
+            window.ShowDialog();
+            
+            // Asegurar que los valores finales se guarden
+            _config.GamePath = configCopy.GamePath;
+            _config.CfgBinPath = configCopy.CfgBinPath;
+            _config.ViolaCliPath = configCopy.ViolaCliPath;
+            SaveConfig();
+        }
+
+        private void Exit_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viola.IsRunning)
+            {
+                var result = MessageBox.Show(
+                    "There is an operation in progress. Are you sure you want to exit?",
+                    "Exit",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+                
+                if (result == MessageBoxResult.No)
+                    return;
+                
+                _viola.Stop();
+            }
+
+            SaveConfig();
+            Close();
+        }
+
+        private void Log(string message, string level = "info")
+        {
+            Dispatcher.Invoke(() =>
+            {
+                var timestamp = DateTime.Now.ToString("HH:mm:ss");
+                var formattedMessage = $"[{timestamp}] {message}\n";
+                
+                // Limit log size before adding new text
+                var lines = LogTextBox.LineCount;
+                if (lines > 1000)
+                {
+                    var startIndex = LogTextBox.GetCharacterIndexFromLineIndex(lines - 1000);
+                    LogTextBox.Text = LogTextBox.Text.Substring(startIndex);
+                }
+                
+                // Append new message
+                LogTextBox.AppendText(formattedMessage);
+                
+                // Scroll to end after text is added
+                LogTextBox.CaretIndex = LogTextBox.Text.Length;
+                LogTextBox.ScrollToEnd();
+            });
+        }
+
+        private void CleanupTempDir()
+        {
+            var tmpRoot = _config?.TmpDir ?? Config.DefaultTmpDir;
+            if (Directory.Exists(tmpRoot))
+            {
+                try
+                {
+                    Directory.Delete(tmpRoot, true);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Could not clean temporary folder {tmpRoot}: {ex.Message}");
+                }
+            }
+            Directory.CreateDirectory(tmpRoot);
+        }
+    }
+
+    public class ModEntryViewModel : System.ComponentModel.INotifyPropertyChanged
+    {
+        private bool _enabled;
+
+        public string Name { get; set; } = string.Empty;
+        
+        public bool Enabled
+        {
+            get => _enabled;
+            set
+            {
+                _enabled = value;
+                OnPropertyChanged(nameof(Enabled));
+                OnPropertyChanged(nameof(EnabledIcon));
+            }
+        }
+        
+        public string EnabledIcon => Enabled ? "✓" : "✗";
+        public string DisplayName { get; set; } = string.Empty;
+        public string Author { get; set; } = string.Empty;
+        public string ModVersion { get; set; } = string.Empty;
+        public string GameVersion { get; set; } = string.Empty;
+
+        public ModEntryViewModel(ModEntry mod)
+        {
+            Name = mod.Name;
+            Enabled = mod.Enabled;
+            DisplayName = mod.DisplayName;
+            Author = mod.Author;
+            ModVersion = string.IsNullOrEmpty(mod.ModVersion) ? "—" : mod.ModVersion;
+            GameVersion = string.IsNullOrEmpty(mod.GameVersion) ? "—" : mod.GameVersion;
+        }
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+        protected virtual void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
+        }
+    }
+}
+

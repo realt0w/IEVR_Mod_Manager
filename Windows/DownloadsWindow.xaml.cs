@@ -1,0 +1,68 @@
+using System.Diagnostics;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
+using IEVRModManager;
+
+namespace IEVRModManager.Windows
+{
+    public partial class DownloadsWindow : Window
+    {
+        public DownloadsWindow(Window parent)
+        {
+            InitializeComponent();
+            Owner = parent;
+        }
+
+        private void Link_MouseEnter(object sender, MouseEventArgs e)
+        {
+            if (sender is System.Windows.Controls.TextBlock textBlock)
+            {
+                textBlock.TextDecorations = System.Windows.TextDecorations.Underline;
+                textBlock.FontSize = 13;
+            }
+        }
+
+        private void Link_MouseLeave(object sender, MouseEventArgs e)
+        {
+            if (sender is System.Windows.Controls.TextBlock textBlock)
+            {
+                textBlock.TextDecorations = null;
+                textBlock.FontSize = 12;
+            }
+        }
+
+        private void ViolaLink_Click(object sender, MouseButtonEventArgs e)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = Config.ViolaReleaseUrl,
+                UseShellExecute = true
+            });
+        }
+
+        private void CpkListLink_Click(object sender, MouseButtonEventArgs e)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = Config.CpkListUrl,
+                UseShellExecute = true
+            });
+        }
+
+        private void GameBananaLink_Click(object sender, MouseButtonEventArgs e)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = Config.GameBananaModsUrl,
+                UseShellExecute = true
+            });
+        }
+
+        private void Close_Click(object sender, RoutedEventArgs e)
+        {
+            Close();
+        }
+    }
+}
+

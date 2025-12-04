@@ -1,0 +1,94 @@
+<Window x:Class="IEVRModManager.Windows.ConfigPathsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Configuration" Height="400" Width="800"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BgBrush}">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <Label Grid.Row="0" Content="Configuration" 
+               FontSize="18" FontWeight="Bold" 
+               Foreground="{StaticResource TextBrush}"
+               Margin="0,0,0,10"/>
+
+        <!-- Info Label -->
+        <Label Grid.Row="1" Content="Configuration is saved automatically" 
+               FontSize="10" FontStyle="Italic"
+               Foreground="{StaticResource TimestampBrush}"
+               Margin="4,0,0,15"/>
+
+        <!-- Game Path -->
+        <Grid Grid.Row="2" Margin="0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Label Grid.Column="0" Content="🎮 Game path:" 
+                   Foreground="{StaticResource TextBrush}" 
+                   Width="220" HorizontalAlignment="Left"/>
+            <TextBox Grid.Column="1" x:Name="GamePathTextBox" 
+                     Text="{Binding GamePath, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                     Margin="4,0" TextChanged="GamePathTextBox_TextChanged"/>
+            <Button Grid.Column="2" Content="Browse..." 
+                    Style="{StaticResource PrimaryButtonStyle}" 
+                    Width="120" Click="BrowseGame_Click" Margin="4,0"/>
+        </Grid>
+
+        <!-- CfgBin Path -->
+        <Grid Grid.Row="3" Margin="0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Label Grid.Column="0" Content="📄 cpk_list.cfg.bin:" 
+                   Foreground="{StaticResource TextBrush}" 
+                   Width="220" HorizontalAlignment="Left"/>
+            <TextBox Grid.Column="1" x:Name="CfgBinPathTextBox" 
+                     Text="{Binding CfgBinPath, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                     Margin="4,0" TextChanged="CfgBinPathTextBox_TextChanged"/>
+            <Button Grid.Column="2" Content="Browse..." 
+                    Style="{StaticResource PrimaryButtonStyle}" 
+                    Width="120" Click="BrowseCfgBin_Click" Margin="4,0"/>
+        </Grid>
+
+        <!-- ViolaCli Path -->
+        <Grid Grid.Row="4" Margin="0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Label Grid.Column="0" Content="⚙️ Viola.CLI-Portable.exe:" 
+                   Foreground="{StaticResource TextBrush}" 
+                   Width="220" HorizontalAlignment="Left"/>
+            <TextBox Grid.Column="1" x:Name="ViolaCliPathTextBox" 
+                     Text="{Binding ViolaCliPath, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
+                     Margin="4,0" TextChanged="ViolaCliPathTextBox_TextChanged"/>
+            <Button Grid.Column="2" Content="Browse..." 
+                    Style="{StaticResource PrimaryButtonStyle}" 
+                    Width="120" Click="BrowseViolaCli_Click" Margin="4,0"/>
+        </Grid>
+
+        <!-- Spacer -->
+        <Grid Grid.Row="5"/>
+
+        <!-- Close Button -->
+        <Button Grid.Row="6" Content="Close" 
+                Style="{StaticResource PrimaryButtonStyle}" 
+                Width="140" HorizontalAlignment="Right" 
+                Click="Close_Click" Margin="0,20,0,0"/>
+    </Grid>
+</Window>
+

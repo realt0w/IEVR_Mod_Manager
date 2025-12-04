@@ -4,7 +4,9 @@ A graphical mod manager for **Inazuma Eleven Victory Road** that allows you to e
 
 **Version 1.1** - Features a modern dark theme interface with improved usability.
 
-## Table of Contents
+---
+
+## 📋 Table of Contents
 
 - [For Users](#for-users)
   - [Requirements](#requirements)
@@ -18,10 +20,15 @@ A graphical mod manager for **Inazuma Eleven Victory Road** that allows you to e
   - [Creating a Mod](#creating-a-mod)
   - [Mod Metadata](#mod-metadata)
   - [Mod Priority](#mod-priority)
+- [For Developers](#for-developers)
+  - [Development Requirements](#development-requirements)
+  - [Building the Project](#building-the-project)
+  - [Running the Project](#running-the-project)
+  - [Project Structure](#project-structure)
 
 ---
 
-## For Users
+## 👥 For Users
 
 ### Requirements
 
@@ -42,7 +49,7 @@ Before using the Mod Manager, make sure you have:
 
 When you first launch the Mod Manager, you need to configure the following paths:
 
-1. Click the **"⚙️ Configuration"** button at the bottom of the window to open the Configuration window
+1. Click the **"⚙️ Configuration"** button at the bottom of the window
 
 2. Configure the following paths:
    - **Game Path**: Click "Browse" next to "🎮 Game path:" and select your Inazuma Eleven Victory Road installation folder
@@ -79,7 +86,7 @@ The main window displays all mods found in the `Mods/` folder. Each mod shows:
 
 #### Installing Mods
 
-1. Download a mod from a trusted source
+1. Download a mod from a trusted source (e.g., [GameBanana](https://gamebanana.com/mods/games/20069))
 2. Extract the mod folder to the `Mods/` directory (located in the same folder as `IEVRModManager.exe`)
 3. Click "Scan Mods" in the Mod Manager to refresh the list
 4. The new mod should appear in the list
@@ -90,7 +97,7 @@ The main window displays all mods found in the `Mods/` folder. Each mod shows:
 2. Arrange mod priority using "⬆️ Move Up" and "⬇️ Move Down" if needed
 3. Click **"✓ Apply Changes"** button
 4. Wait for the process to complete - you can monitor progress in the Activity Log panel at the bottom
-5. When you see "MODS APPLIED!!" in the log, the mods have been successfully installed
+5. When you see "MODS APPLIED!!" in the log and a confirmation popup appears, the mods have been successfully installed
 
 **Important Notes:**
 - The Mod Manager merges all enabled mods and applies them to your game's `data` folder
@@ -127,7 +134,7 @@ The main window displays all mods found in the `Mods/` folder. Each mod shows:
 
 ---
 
-## For Mod Developers
+## 🛠️ For Mod Developers
 
 ### Mod Structure
 
@@ -210,20 +217,146 @@ When two mods modify the same file:
 
 ---
 
-## Support
+## 💻 For Developers
+
+### Development Requirements
+
+- **.NET 8.0 SDK** or higher
+- **Windows** (WPF only works on Windows)
+- **Visual Studio 2022** or **Visual Studio Code** with C# extension
+- **Git** (optional, for version control)
+
+### Building the Project
+
+#### From Visual Studio:
+1. Open `IEVRModManager.csproj` in Visual Studio
+2. Select "Build" > "Build Solution" (or press Ctrl+Shift+B)
+3. The executable will be generated in `bin\Debug\net8.0-windows\` or `bin\Release\net8.0-windows\`
+
+#### From command line:
+
+**Build in Debug mode:**
+```bash
+dotnet build
+```
+
+**Build in Release mode:**
+```bash
+dotnet build -c Release
+```
+
+**Publish for distribution (self-contained):**
+```bash
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
+```
+- Generates a single executable file in: `bin\Release\net8.0-windows\win-x64\publish\`
+- Does not require .NET installed on the user's system
+
+**Publish for distribution (standard):**
+```bash
+dotnet publish -c Release -r win-x64 --self-contained false
+```
+- Generates files in: `bin\Release\net8.0-windows\win-x64\publish\`
+- Requires .NET 8.0 Runtime installed on the user's system
+
+### Running the Project
+
+#### From Visual Studio:
+1. Open `IEVRModManager.csproj` in Visual Studio
+2. Press **F5** or click "Start"
+
+#### From command line:
+```bash
+dotnet run
+```
+
+#### Run the compiled executable:
+```bash
+.\bin\Release\net8.0-windows\IEVRModManager.exe
+```
+
+### Project Structure
+
+```
+IEVRModManager/
+├── IEVRModManager.csproj      # C# project file
+├── App.xaml / App.xaml.cs      # Application entry point (WPF)
+├── MainWindow.xaml / .cs       # Main window
+├── Config.cs                   # Constants and configuration
+│
+├── Models/                     # Data models
+│   ├── ModEntry.cs            # Mod entry model
+│   └── AppConfig.cs           # Application configuration
+│
+├── Managers/                   # Business logic
+│   ├── ConfigManager.cs       # Configuration management
+│   ├── ModManager.cs          # Mod management
+│   └── ViolaIntegration.cs    # Viola CLI integration
+│
+├── Windows/                    # Secondary windows
+│   ├── ConfigPathsWindow.xaml/.cs    # Configuration window
+│   ├── DownloadsWindow.xaml/.cs      # Downloads window
+│   └── SuccessMessageWindow.xaml/.cs # Success message window
+│
+└── Themes/                     # Styles and themes
+    └── DarkTheme.xaml          # Dark theme
+```
+
+### Useful Commands
+
+**Clean build files:**
+```bash
+dotnet clean
+```
+
+**Restore dependencies:**
+```bash
+dotnet restore
+```
+
+**View project information:**
+```bash
+dotnet --info
+```
+
+**View project references:**
+```bash
+dotnet list package
+```
+
+### Technologies Used
+
+- **.NET 8.0** - Development framework
+- **WPF (Windows Presentation Foundation)** - Graphical interface
+- **C#** - Programming language
+- **System.Text.Json** - JSON serialization
+- **System.IO** - File operations
+
+### Development Notes
+
+- The project uses **nullable reference types** (`nullable enable`)
+- Configuration is saved in `config.json` in the application base directory
+- Mods are scanned from the `Mods/` folder in the base directory
+- Temporary files are created in the `tmp/` folder in the base directory
+- The `config.json` format is compatible with previous versions of the project
+
+---
+
+## 📝 License
+
+[Add license information here]
+
+## 🙏 Credits
+
+- Mod Manager created by [Your Name]
+- Uses [Viola](https://github.com/skythebro/Viola) for CPK merging
+- Mods available on [GameBanana](https://gamebanana.com/mods/games/20069)
+
+---
+
+## 📞 Support
 
 If you encounter issues or have questions:
 - Check the troubleshooting section above
 - Review the log output in the Mod Manager for error messages
 - Ensure all requirements are properly installed and configured
-
----
-
-## License
-
-[Add your license information here]
-
-## Credits
-
-- Mod Manager created by [Your Name]
-- Uses [Viola](https://github.com/skythebro/Viola) for CPK merging
