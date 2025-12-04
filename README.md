@@ -288,21 +288,8 @@ dotnet list package   # View project references
 
 ---
 
-## License
-
-[Add license information here]
-
 ## Credits
 
 - Mod Manager created by [Your Name]
 - Uses [Viola](https://github.com/skythebro/Viola) for CPK merging
 - Mods available on [GameBanana](https://gamebanana.com/mods/games/20069)
-
----
-
-## Support
-
-If you encounter issues:
-- Check the troubleshooting section above
-- Review the log output in the Mod Manager for error messages
-- Ensure all requirements are properly installed and configured
