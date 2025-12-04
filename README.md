@@ -238,38 +238,6 @@ dotnet run
 .\bin\Release\net8.0-windows\IEVRModManager.exe
 ```
 
-### Project Structure
-
-```
-IEVRModManager/
-├── IEVRModManager.csproj      # C# project file
-├── App.xaml / App.xaml.cs      # Application entry point
-├── MainWindow.xaml / .cs       # Main window
-├── Config.cs                   # Constants and configuration
-├── Models/                     # Data models
-│   ├── ModEntry.cs
-│   └── AppConfig.cs
-├── Managers/                   # Business logic
-│   ├── ConfigManager.cs
-│   ├── ModManager.cs
-│   └── ViolaIntegration.cs
-├── Windows/                    # Secondary windows
-│   ├── ConfigPathsWindow.xaml/.cs
-│   ├── DownloadsWindow.xaml/.cs
-│   └── SuccessMessageWindow.xaml/.cs
-└── Themes/                     # Styles and themes
-    └── DarkTheme.xaml
-```
-
-### Useful Commands
-
-```bash
-dotnet clean          # Clean build files
-dotnet restore        # Restore dependencies
-dotnet --info         # View project information
-dotnet list package   # View project references
-```
-
 ### Technologies Used
 
 - **.NET 8.0** - Development framework
@@ -290,6 +258,6 @@ dotnet list package   # View project references
 
 ## Credits
 
-- Mod Manager created by [Your Name]
+- Mod Manager created by Adr1GR
 - Uses [Viola](https://github.com/skythebro/Viola) for CPK merging
 - Mods available on [GameBanana](https://gamebanana.com/mods/games/20069)
