@@ -24,10 +24,15 @@ DEFAULT_TMP_DIR = os.path.join(BASE_DIR, TMP_DIRNAME)
 
 
 class ModEntry:
-    def __init__(self, name, path, enabled=True):
+    def __init__(self, name, path, enabled=True, display_name=None, author=None, mod_version=None, game_version=None):
         self.name = name
         self.path = path
         self.enabled = tk.BooleanVar(value=enabled)
+        # Nuevos campos:
+        self.display_name = display_name or name
+        self.author = author or ""
+        self.mod_version = mod_version or ""
+        self.game_version = game_version or ""
 
 
 class IEVRModManager(tk.Tk):
@@ -58,6 +63,14 @@ class IEVRModManager(tk.Tk):
 
         self._load_config()
         self.scan_mods()
+
+        tmp_root = self.tmp_dir.get() if isinstance(self.tmp_dir, tk.StringVar) else DEFAULT_TMP_DIR
+        if os.path.isdir(tmp_root):
+            try:
+                shutil.rmtree(tmp_root)
+            except Exception as e:
+                print(f"Could not clean temporary folder {tmp_root}: {e}")
+        os.makedirs(tmp_root, exist_ok=True)
 
     # ---------- UI ----------
     def _build_ui(self):
@@ -123,13 +136,17 @@ class IEVRModManager(tk.Tk):
         self.style.configure("Treeview", rowheight=24, font=("Segoe UI", 10))
         self.style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"))
 
-        self.tree = ttk.Treeview(mods_frame, columns=("enabled", "name", "path"), show="headings", selectmode="browse")
+        self.tree = ttk.Treeview(mods_frame, columns=("enabled", "display_name", "mod_version", "game_version", "author"), show="headings", selectmode="browse")
         self.tree.heading("enabled", text="Enabled")
-        self.tree.heading("name", text="Name")
-        self.tree.heading("path", text="Path")
+        self.tree.heading("display_name", text="Name")
+        self.tree.heading("mod_version", text="Mod Version")
+        self.tree.heading("game_version", text="Game Version")
+        self.tree.heading("author", text="Author")
         self.tree.column("enabled", width=80, anchor="center")
-        self.tree.column("name", width=220, anchor="w")
-        self.tree.column("path", width=540, anchor="w")
+        self.tree.column("display_name", width=220, anchor="w")
+        self.tree.column("mod_version", width=100, anchor="center")
+        self.tree.column("game_version", width=110, anchor="center")
+        self.tree.column("author", width=150, anchor="w")
         self.tree.grid(row=0, column=0, sticky="nsew")
 
         scrollbar = ttk.Scrollbar(mods_frame, orient="vertical", command=self.tree.yview)
@@ -156,7 +173,7 @@ class IEVRModManager(tk.Tk):
             ttk.Button(ctrl_frame, text=text, command=cmd).grid(row=idx, column=0, sticky="ew", pady=3)
         ctrl_frame.grid_rowconfigure(len(btns), weight=1)
 
-        # Log frame (abajo)
+        # Log frame
         frm_log = ttk.LabelFrame(self, text="Log", padding=5)
         frm_log.grid(row=2, column=0, sticky="nsew", padx=10, pady=(6,10))
         frm_log.grid_rowconfigure(0, weight=1)
@@ -164,7 +181,6 @@ class IEVRModManager(tk.Tk):
         self.txt_log = tk.Text(frm_log, height=12, wrap="none", font=("Consolas", 10))
         self.txt_log.grid(row=0, column=0, sticky="nsew", padx=2, pady=2)
 
-        # Botonera inferior
         frm_bottom = ttk.Frame(self, padding=10)
         frm_bottom.grid(row=3, column=0, sticky="ew")
         #ttk.Button(frm_bottom, text="Save Config", command=self._save_config).grid(row=0, column=0, sticky="w")
@@ -212,18 +228,33 @@ class IEVRModManager(tk.Tk):
         saved_map = {m["name"]: m.get("enabled", True) for m in self.saved_mods} if self.saved_mods else {}
 
         saved_order = [m["name"] for m in self.saved_mods] if self.saved_mods else []
-        ordered_names = saved_order + [n for n in names if n not in saved_order]
+        ordered_names = [n for n in saved_order if n in names] + [n for n in names if n not in saved_order]
 
         self.mod_entries = []
         for n in ordered_names:
             mod_path = os.path.join(mods_root, n)
+            moddata_path = os.path.join(mod_path, "mod_data.json")
+            display_name = n
+            author = ""
+            mod_version = ""
+            game_version = ""
+            if os.path.exists(moddata_path):
+                try:
+                    with open(moddata_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        display_name = data.get("Name") or n
+                        author = data.get("Author") or ""
+                        mod_version = data.get("ModVersion") or ""
+                        game_version = data.get("GameVersion") or ""
+                except Exception:
+                    pass
             if n in old_map:
                 enabled = old_map[n]
             elif n in saved_map:
                 enabled = saved_map[n]
             else:
                 enabled = True
-            me = ModEntry(n, mod_path, enabled=enabled)
+            me = ModEntry(n, mod_path, enabled=enabled, display_name=display_name, author=author, mod_version=mod_version, game_version=game_version)
             me.enabled.trace_add("write", self._make_mod_enabled_trace(me))
             self.mod_entries.append(me)
 
@@ -248,7 +279,14 @@ class IEVRModManager(tk.Tk):
             iid = me.name if me.name not in self.tree.get_children() else f"{me.name}__{idx}"
             if iid in self.tree.get_children():
                 iid = f"{me.name}__{idx}"
-            self.tree.insert("", "end", iid=me.name, values=("Yes" if me.enabled.get() else "No", me.name, me.path))
+
+            self.tree.insert("", "end", iid=me.name, values=(
+                "Yes" if me.enabled.get() else "No",
+                me.display_name,
+                me.mod_version,
+                me.game_version,
+                me.author
+            ))
         self._save_config()
 
     def _get_selected_index(self):
