@@ -24,7 +24,6 @@ A mod manager for **Inazuma Eleven Victory Road**.
   - [Development Requirements](#development-requirements)
   - [Building the Project](#building-the-project)
   - [Running the Project](#running-the-project)
-  - [Project Structure](#project-structure)
 
 ---
 
