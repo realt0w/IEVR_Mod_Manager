@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+build/
+dist/
+*.spec
+*.log
+*.tmp*
+*.bak
+*.swp
+.DS_Store
+# VSCode/IDE/user config
+.vscode/
+.idea/
+*.sublime*
+# Configs locales
+config.json
+# Bytecode compilado y artefactos de PyInstaller
+pyinstaller*/
+*.pyc
+*.pyo
+# Carpeta de mods generada o temporal
+Mods/
+tmp/
+# Archivos temporales de ejecución
+*.pyd
+*.orig
+# Otros
+.env
+.env.*
+# Sistema
+Thumbs.db
