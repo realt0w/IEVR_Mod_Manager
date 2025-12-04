@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -310,6 +311,33 @@ namespace IEVRModManager
                 MessageBox.Show($"{path} does not exist", "Info", 
                     MessageBoxButton.OK, MessageBoxImage.Information);
             }
+        }
+
+        private void HelpLink_MouseEnter(object sender, MouseEventArgs e)
+        {
+            if (sender is System.Windows.Controls.TextBlock textBlock)
+            {
+                textBlock.TextDecorations = System.Windows.TextDecorations.Underline;
+                textBlock.FontSize = 13;
+            }
+        }
+
+        private void HelpLink_MouseLeave(object sender, MouseEventArgs e)
+        {
+            if (sender is System.Windows.Controls.TextBlock textBlock)
+            {
+                textBlock.TextDecorations = null;
+                textBlock.FontSize = 12;
+            }
+        }
+
+        private void HelpLink_Click(object sender, MouseButtonEventArgs e)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://github.com/Adr1GR/IEVR_Mod_Manager?tab=readme-ov-file#using-the-mod-manager",
+                UseShellExecute = true
+            });
         }
 
         private void Downloads_Click(object sender, RoutedEventArgs e)

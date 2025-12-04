@@ -73,6 +73,8 @@ The main window displays all mods found in the `Mods/` folder. Each mod shows:
 **Installing Mods:**
 1. Download a mod from a trusted source (e.g., [GameBanana](https://gamebanana.com/mods/games/20069))
 2. Extract the mod folder to the `Mods/` directory
+   - **Important:** The mod folder structure must be: `ModFolderName/data/` (the `data` folder must be directly inside the mod folder)
+   - If the downloaded mod has a different structure, reorganize it so the `data` folder is at the root of the mod folder
 3. Click "Scan Mods" to refresh the list
 
 ### Applying Mods
@@ -106,7 +108,8 @@ The main window displays all mods found in the `Mods/` folder. Each mod shows:
 **Mods not appearing after installation**
 - Click "Scan Mods" to refresh the list
 - Ensure the mod folder is directly inside `Mods/`, not in a subfolder
-- Verify the mod folder contains a `data` folder
+- **Verify the mod structure:** The mod folder must contain a `data` folder directly inside it (structure: `ModFolderName/data/`)
+  - If you see `ModFolderName/ModFolderName/data/`, move the inner folder up one level
 
 **Game crashes or mods don't work**
 - Verify mod compatibility with your game version
@@ -129,6 +132,8 @@ YourModName/
     ├── cpk_list.cfg.bin   (Required - CPK list file)
     └── [other game files] (Optional - Any files you want to modify)
 ```
+
+**Important for mod distribution:** When users download and extract your mod, they should get a folder structure where `data/` is directly inside the mod folder. The extracted structure must be `ModFolderName/data/`, not `ModFolderName/ModFolderName/data/`.
 
 The `data/` folder should mirror the game's `data/` folder structure:
 - Text files: `data/common/text/[language]/[file].cfg.bin`

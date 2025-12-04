@@ -78,7 +78,16 @@
                     <Button Content="🔍 Scan Mods" Style="{StaticResource PrimaryButtonStyle}" 
                             Click="ScanMods_Click" Margin="0,0,4,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
                     <Button Content="📂 Open Mods Folder" Style="{StaticResource PrimaryButtonStyle}" 
-                            Click="OpenModsFolder_Click" Margin="4,0,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                            Click="OpenModsFolder_Click" Margin="4,0,4,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                    <TextBlock Text="📖 Help" 
+                               Foreground="{StaticResource AccentBrush}"
+                               FontSize="12"
+                               Cursor="Hand"
+                               VerticalAlignment="Center"
+                               Margin="4,0,0,0"
+                               MouseEnter="HelpLink_MouseEnter"
+                               MouseLeave="HelpLink_MouseLeave"
+                               MouseLeftButtonDown="HelpLink_Click"/>
                 </StackPanel>
 
                 <!-- Apply Button -->
