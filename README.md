@@ -1,8 +1,8 @@
-# IEVR Mod Manager
+# IEVR Mod Manager 1.2
 
-A graphical mod manager for **Inazuma Eleven Victory Road** that allows you to easily install, manage, and apply multiple mods to your game.
+A mod manager for **Inazuma Eleven Victory Road**.
 
-**Version 1.1** - Features a modern dark theme interface with improved usability.
+<img width="800" height="535" alt="image" src="https://github.com/user-attachments/assets/d83ae72d-57fd-4893-a954-ebe1dc72253d" />
 
 ---
 
