@@ -161,7 +161,8 @@ Create a `mod_data.json` file in your mod's root folder:
     "Name": "Display Name of Your Mod",
     "Author": "Your Name or Username",
     "ModVersion": "1.0",
-    "GameVersion": "1.4.1"
+    "GameVersion": "1.4.1",
+    "ModLink": "https://example.com/your-mod-page"
 }
 ```
 
@@ -170,6 +171,7 @@ Create a `mod_data.json` file in your mod's root folder:
 - **Author** (optional): Your name or username. Use empty string `""` if not specified.
 - **ModVersion** (optional): Version of your mod (e.g., "1.0", "2.3"). Use empty string `""` if not applicable.
 - **GameVersion** (optional): Game version this mod is designed for (e.g., "1.4.1"). Use empty string `""` if not version-specific.
+- **ModLink** (optional): Direct link to the mod page (e.g., GameBanana URL) shown in the manager for quick access.
 
 **Example:**
 ```json
@@ -177,7 +179,8 @@ Create a `mod_data.json` file in your mod's root folder:
     "Name": "Spanish Translation Patch",
     "Author": "Adr1GR",
     "ModVersion": "1.2",
-    "GameVersion": "1.4.1"
+    "GameVersion": "1.4.1",
+    "ModLink": "https://gamebanana.com/mods/637376"
 }
 ```
 
