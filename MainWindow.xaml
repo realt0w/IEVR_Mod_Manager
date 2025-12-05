@@ -103,7 +103,7 @@
                             MinWidth="160"
                             Click="OpenModsFolder_Click" Margin="4,0,8,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
-                        <Label Content="cpk list:" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <Label Content="Version:" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="0,0,4,0"/>
                         <ComboBox x:Name="CpkSelector"
                                   Width="240"
                                   ItemsSource="{Binding}"

@@ -50,6 +50,19 @@ namespace IEVRModManager.Windows
             });
         }
 
+        private void DownloadCpkListButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (Owner is MainWindow mainWindow)
+            {
+                mainWindow.DownloadCpkLists_Click(sender, e);
+            }
+            else
+            {
+                // Fallback: open the link if owner is not available
+                CpkListLink_Click(sender, null!);
+            }
+        }
+
         private void GameBananaLink_Click(object sender, MouseButtonEventArgs e)
         {
             Process.Start(new ProcessStartInfo

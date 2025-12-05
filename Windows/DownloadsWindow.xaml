@@ -1,7 +1,7 @@
 <Window x:Class="IEVRModManager.Windows.DownloadsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Downloads" Height="350" Width="600"
+        Title="Downloads" Height="370" Width="600"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource BgBrush}">
     <Grid Margin="20">
@@ -18,7 +18,17 @@
                Margin="0,0,0,10"/>
 
         <!-- Links -->
-        <StackPanel Grid.Row="1" Margin="0,10">
+        <StackPanel Grid.Row="1" Margin="0,10" Orientation="Vertical">
+            <TextBlock x:Name="GameBananaLink" 
+                       Text="🔗 Download Mods from GameBanana" 
+                       Foreground="{StaticResource AccentBrush}"
+                       FontSize="12"
+                       Cursor="Hand"
+                       MouseEnter="Link_MouseEnter"
+                       MouseLeave="Link_MouseLeave"
+                       MouseLeftButtonDown="GameBananaLink_Click"
+                       Margin="0,12"/>
+
             <TextBlock x:Name="ViolaLink" 
                        Text="🔗 Download Viola.CLI-Portable.exe" 
                        Foreground="{StaticResource AccentBrush}"
@@ -30,7 +40,7 @@
                        Margin="0,12"/>
             
             <TextBlock x:Name="CpkListLink" 
-                       Text="🔗 Download cpk_list.cfg.bin" 
+                       Text="🔗 cpk_list.cfg.bin repository" 
                        Foreground="{StaticResource AccentBrush}"
                        FontSize="12"
                        Cursor="Hand"
@@ -38,16 +48,13 @@
                        MouseLeave="Link_MouseLeave"
                        MouseLeftButtonDown="CpkListLink_Click"
                        Margin="0,12"/>
+
+            <Button Content="⬇️ Download cpk_list"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    HorizontalAlignment="Left"
+                    Width="180"
+                    Click="DownloadCpkListButton_Click"/>
             
-            <TextBlock x:Name="GameBananaLink" 
-                       Text="🔗 Download Mods from GameBanana" 
-                       Foreground="{StaticResource AccentBrush}"
-                       FontSize="12"
-                       Cursor="Hand"
-                       MouseEnter="Link_MouseEnter"
-                       MouseLeave="Link_MouseLeave"
-                       MouseLeftButtonDown="GameBananaLink_Click"
-                       Margin="0,12"/>
         </StackPanel>
 
         <!-- Close Button -->

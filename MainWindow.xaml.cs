@@ -301,7 +301,7 @@ namespace IEVRModManager
             }
         }
 
-        private async void DownloadCpkLists_Click(object sender, RoutedEventArgs e)
+        public async void DownloadCpkLists_Click(object sender, RoutedEventArgs e)
         {
             if (sender is System.Windows.Controls.Button button)
             {
