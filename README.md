@@ -32,9 +32,8 @@ A mod manager for **Inazuma Eleven Victory Road**.
 ### Requirements
 
 - **Inazuma Eleven Victory Road** installed on your system
-- **Viola.CLI-Portable.exe** - Download from [Viola releases](https://github.com/skythebro/Viola/releases/latest)
-- **cpk_list.cfg.bin** - Download from [cpk_list repository](https://github.com/Adr1GR/IEVR_Mod_Manager/tree/main/cpk_list)
-  - Download the version matching your game version (e.g., `1_4_1_cpk_list.cfg.bin` for game version 1.4.1)
+- **Viola.CLI-Portable.exe** - Download from [Viola releases](https://github.com/skythebro/Viola/releases/latest) and place a single copy in the shared `viola` folder (see First Time Setup)
+- **cpk_list.cfg.bin** - Use the **Download cpk_list** button (recommended) or download from the [cpk_list repository](https://github.com/Adr1GR/IEVR_Mod_Manager/tree/main/cpk_list) and copy it into the shared `cpk` folder (you can keep multiple versions)
 
 ### Installation
 
@@ -44,18 +43,22 @@ A mod manager for **Inazuma Eleven Victory Road**.
 
 ### First Time Setup
 
-Configure the following paths via the **Configuration** button:
+The app stores its data in `%AppData%\.ievrModManager\` (configuration, mods, temp files, and shared downloads).
 
-- **Game Path**: Select your Inazuma Eleven Victory Road installation folder
-  - Example: `C:\Program Files (x86)\Steam\steamapps\common\INAZUMA ELEVEN Victory Road`
-- **cpk_list.cfg.bin Path**: Select the `cpk_list.cfg.bin` file matching your game version
-- **Viola.CLI-Portable.exe Path**: Select the `Viola.CLI-Portable.exe` executable
-
-Access download links via the **Downloads** button. Settings are saved automatically.
+1. Open **Configuration** and set **Game Path** (root folder that contains `data`).
+2. Prepare the shared **cpk** folder:
+   - Click **Download cpk_list** to fetch available `cpk_list.cfg.bin` files into `%AppData%\.ievrModManager\storage\cpk`, **or** copy your own file there.
+   - Choose the desired file in the dropdown on the main window (selection is saved).
+3. Prepare the shared **Viola** folder:
+   - Place exactly one `Viola.CLI-Portable.exe` in `%AppData%\.ievrModManager\storage\viola`.
+   - The app auto-detects it; if there are multiple `.exe` files you will be asked to keep only one.
+4. Mods folder location:
+   - Mods are loaded from `%AppData%\.ievrModManager\Mods`. Use **Open Mods Folder** to go directly to that directory.
+5. Settings are saved automatically. Use **Downloads** for quick links to Viola, cpk_list, and GameBanana.
 
 ### Using the Mod Manager
 
-The main window displays all mods found in the `Mods/` folder. Each mod shows:
+The main window shows all mods found in `%AppData%\.ievrModManager\Mods` (top = highest priority). Each mod shows:
 - Enabled status (✓ = enabled, ✗ = disabled)
 - Display name
 - Version
@@ -64,57 +67,57 @@ The main window displays all mods found in the `Mods/` folder. Each mod shows:
 
 **Operations:**
 - **Enable/Disable**: Double-click a mod row or click the ✓/✗ column
-- **Scan Mods**: Refresh the mod list after adding new mods
-- **Move Up/Down**: Change mod priority (higher priority mods override conflicting files)
-- **Enable All / Disable All**: Quickly toggle all mods
-- **Open Mods Folder**: Open the `Mods/` directory in Windows Explorer
+- **Scan Mods**: Refresh after adding/removing mods in the Mods folder
+- **Move Up/Down**: Change mod priority (higher overrides lower on conflicts)
+- **Enable All / Disable All**: Quickly toggle every mod
+- **Open Mods Folder**: Opens the Mods directory in Explorer
+- **cpk selector + Download cpk_list**: Pick which `cpk_list.cfg.bin` to use and download missing files directly into the shared storage
 
 **Installing Mods:**
 1. Download a mod from a trusted source (e.g., [GameBanana](https://gamebanana.com/mods/games/20069))
-2. Extract the mod folder to the `Mods/` directory
-   - **Important:** The mod folder structure must be: `ModFolderName/data/` (the `data` folder must be directly inside the mod folder)
-   - If the downloaded mod has a different structure, reorganize it so the `data` folder is at the root of the mod folder
-3. Click "Scan Mods" to refresh the list
+2. Extract the mod folder to `%AppData%\.ievrModManager\Mods` (use **Open Mods Folder**)
+   - **Important:** Folder structure must be `ModFolderName/data/` (the `data` folder directly inside the mod folder)
+   - If the archive has `ModFolderName/ModFolderName/data/`, move the inner folder up one level
+3. Click **Scan Mods** to refresh the list
 
 ### Applying Mods
 
-1. Ensure desired mods are enabled
-2. Arrange mod priority if needed
-3. Click **"Apply Changes"**
-4. Wait for completion (monitor progress in Activity Log)
-5. A confirmation popup will appear when mods are successfully applied
+1. Enable the mods you want and arrange priority.
+2. Choose the `cpk_list.cfg.bin` from the dropdown (fetched from the shared `cpk` folder).
+3. Click **Apply Changes**.
+4. The app will:
+   - Warn you about `data/packs` edits and file conflicts so you can cancel if needed
+   - Use the selected `cpk_list.cfg.bin` and the Viola executable from shared storage
+   - Merge mods, copy results into the game `data` folder, and remove leftover files from the previous install
+   - If **no mods** are enabled, it simply restores the selected `cpk_list.cfg.bin` to the game
+5. A popup confirms success and lists the mods that were applied.
 
 **Notes:**
-- The Mod Manager merges all enabled mods and applies them to your game's `data` folder
-- If no mods are enabled, it restores the original `cpk_list.cfg.bin` file
 - Always close the game before applying mods
-- Process duration depends on the number and size of mods
+- Duration depends on the number and size of mods
 
 ### Troubleshooting
 
 **"Invalid game path" error**
-- Verify the correct game installation folder is selected
-- The folder must contain a `data` subfolder
+- Select the correct game root folder (must contain `data`)
 
-**"violacli.exe not found" error**
-- Use the **Downloads** button to access download links
-- Configure the correct path in the Configuration window
+**"No Viola executable found" or multiple executables**
+- Keep exactly one `.exe` inside `%AppData%\.ievrModManager\storage\viola`
+- Use **Downloads** to get the official Viola release, then place it there
 
-**"Invalid cpk_list.cfg.bin path" error**
-- Download the correct `cpk_list.cfg.bin` file for your game version
-- Verify the file path in the Configuration window
+**"Invalid cpk_list.cfg.bin" error**
+- Download/refresh via **Download cpk_list** or copy the right file into `%AppData%\.ievrModManager\storage\cpk`
+- Re-select it in the dropdown if necessary
 
-**Mods not appearing after installation**
-- Click "Scan Mods" to refresh the list
-- Ensure the mod folder is directly inside `Mods/`, not in a subfolder
-- **Verify the mod structure:** The mod folder must contain a `data` folder directly inside it (structure: `ModFolderName/data/`)
-  - If you see `ModFolderName/ModFolderName/data/`, move the inner folder up one level
+**Mods not appearing**
+- Click **Scan Mods**
+- Ensure the mod folder sits directly inside `%AppData%\.ievrModManager\Mods` (not another subfolder)
+- Check the structure: `ModFolderName/data/`
 
 **Game crashes or mods don't work**
 - Verify mod compatibility with your game version
-- Check the mod's `GameVersion` field matches your game version
-- Disable mods one by one to identify conflicts
-- Ensure mod priority is set correctly
+- Disable mods one by one to find conflicts
+- Adjust mod priority (higher overrides lower)
 
 ---
 
@@ -141,7 +144,7 @@ The `data/` folder should mirror the game's `data/` folder structure:
 
 ### Creating a Mod
 
-1. Create a mod folder in the `Mods/` directory (use a descriptive name, avoid spaces)
+1. Create a mod folder inside `%AppData%\.ievrModManager\Mods` (use a descriptive name, avoid spaces)
 2. Create the `data/` folder inside your mod folder
 3. Add your modded files to `data/`, maintaining the same directory structure as the game
 4. Create `mod_data.json` in the root of your mod folder (see [Mod Metadata](#mod-metadata))
@@ -248,10 +251,11 @@ dotnet run
 ### Development Notes
 
 - Project uses **nullable reference types** (`nullable enable`)
-- Configuration saved in `config.json` in the application base directory
-- Mods scanned from `Mods/` folder in the base directory
-- Temporary files created in `tmp/` folder in the base directory
-- `config.json` format is compatible with previous versions
+- App data root: `%AppData%\.ievrModManager\`
+  - `config.json`, `last_install.json`
+  - `Mods/` (user mods), `tmp/` (merge workspace), `storage/cpk` (cpk_list), `storage/viola` (Viola executable)
+- Default mods directory is `%AppData%\.ievrModManager\Mods`
+- `config.json` format remains compatible with previous versions
 
 ---
 
