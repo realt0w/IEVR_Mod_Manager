@@ -171,6 +171,7 @@ config.json
 Mods/
 tmp/
 mod_data_tmp.json
+assets/
 
 # Environment files
 .env
