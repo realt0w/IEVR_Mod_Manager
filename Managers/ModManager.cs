@@ -75,7 +75,8 @@ namespace IEVRModManager.Managers
                     displayName: modData.DisplayName,
                     author: modData.Author,
                     modVersion: modData.ModVersion,
-                    gameVersion: modData.GameVersion
+                    gameVersion: modData.GameVersion,
+                    modLink: modData.ModLink
                 );
                 modEntries.Add(modEntry);
             }
@@ -91,7 +92,8 @@ namespace IEVRModManager.Managers
                 DisplayName = Path.GetFileName(modPath),
                 Author = string.Empty,
                 ModVersion = string.Empty,
-                GameVersion = string.Empty
+                GameVersion = string.Empty,
+                ModLink = string.Empty
             };
 
             if (!File.Exists(modDataPath))
@@ -117,6 +119,9 @@ namespace IEVRModManager.Managers
 
                     if (data.TryGetValue("GameVersion", out var gameVersionElement))
                         metadata.GameVersion = gameVersionElement.GetString() ?? string.Empty;
+
+                    if (data.TryGetValue("ModLink", out var modLinkElement))
+                        metadata.ModLink = modLinkElement.GetString() ?? string.Empty;
                 }
             }
             catch
@@ -230,6 +235,7 @@ namespace IEVRModManager.Managers
             public string Author { get; set; } = string.Empty;
             public string ModVersion { get; set; } = string.Empty;
             public string GameVersion { get; set; } = string.Empty;
+            public string ModLink { get; set; } = string.Empty;
         }
     }
 }

@@ -13,6 +13,7 @@ namespace IEVRModManager.Models
         public string Author { get; set; } = string.Empty;
         public string ModVersion { get; set; } = string.Empty;
         public string GameVersion { get; set; } = string.Empty;
+        public string ModLink { get; set; } = string.Empty;
 
         [JsonIgnore]
         public string FullPath => System.IO.Path.Combine(Path, Name);
@@ -23,7 +24,8 @@ namespace IEVRModManager.Models
 
         public ModEntry(string name, string path, bool enabled = true, 
             string? displayName = null, string? author = null, 
-            string? modVersion = null, string? gameVersion = null)
+            string? modVersion = null, string? gameVersion = null,
+            string? modLink = null)
         {
             Name = name;
             Path = path;
@@ -32,6 +34,7 @@ namespace IEVRModManager.Models
             Author = author ?? string.Empty;
             ModVersion = modVersion ?? string.Empty;
             GameVersion = gameVersion ?? string.Empty;
+            ModLink = modLink ?? string.Empty;
         }
 
         public ModData ToData()
@@ -39,7 +42,8 @@ namespace IEVRModManager.Models
             return new ModData
             {
                 Name = Name,
-                Enabled = Enabled
+                Enabled = Enabled,
+                ModLink = ModLink
             };
         }
 
@@ -49,7 +53,8 @@ namespace IEVRModManager.Models
             {
                 Name = data.Name,
                 Path = basePath,
-                Enabled = data.Enabled
+                Enabled = data.Enabled,
+                ModLink = data.ModLink ?? string.Empty
             };
         }
     }
@@ -58,6 +63,7 @@ namespace IEVRModManager.Models
     {
         public string Name { get; set; } = string.Empty;
         public bool Enabled { get; set; } = true;
+        public string? ModLink { get; set; }
     }
 }
 

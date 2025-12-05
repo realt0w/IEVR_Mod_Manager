@@ -151,7 +151,8 @@
                                         BorderBrush="{StaticResource BorderBrush}"
                                         BorderThickness="1">
                                     <ScrollViewer Margin="0"
-                                                  Style="{DynamicResource {x:Static GridView.GridViewScrollViewerStyleKey}}">
+                                                  VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled">
                                         <ItemsPresenter/>
                                     </ScrollViewer>
                                 </Border>

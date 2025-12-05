@@ -70,6 +70,7 @@ namespace IEVRModManager
                 var files = Directory.Exists(cpkDir)
                     ? Directory.GetFiles(cpkDir, "*.bin", SearchOption.TopDirectoryOnly)
                         .Concat(Directory.GetFiles(cpkDir, "*.cfg.bin", SearchOption.TopDirectoryOnly))
+                        .Where(f => !string.IsNullOrWhiteSpace(Path.GetFileName(f)))
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .OrderBy(Path.GetFileName)
                         .ToList()
@@ -79,6 +80,13 @@ namespace IEVRModManager
                 foreach (var file in files)
                 {
                     _availableCpkFiles.Add(new CpkOption { FileName = Path.GetFileName(file) });
+                }
+
+                if (_availableCpkFiles.Count == 0)
+                {
+                    CpkSelector.SelectedIndex = -1;
+                    _config.SelectedCpkName = string.Empty;
+                    _config.CfgBinPath = string.Empty;
                 }
 
                 var preferred = _config.SelectedCpkName;
@@ -118,7 +126,8 @@ namespace IEVRModManager
             var modData = _modEntries.Select(me => new ModData
             {
                 Name = me.Name,
-                Enabled = me.Enabled
+                Enabled = me.Enabled,
+                ModLink = me.ModLink
             }).ToList();
 
             var success = _configManager.Save(
@@ -135,7 +144,8 @@ namespace IEVRModManager
                     DisplayName = me.DisplayName,
                     Author = me.Author,
                     ModVersion = me.ModVersion,
-                    GameVersion = me.GameVersion
+                    GameVersion = me.GameVersion,
+                    ModLink = me.ModLink
                 }).ToList()
             );
 
@@ -259,7 +269,8 @@ namespace IEVRModManager
                 DisplayName = me.DisplayName,
                 Author = me.Author,
                 ModVersion = me.ModVersion,
-                GameVersion = me.GameVersion
+                GameVersion = me.GameVersion,
+                ModLink = me.ModLink
             }).ToList();
 
             var scannedMods = _modManager.ScanMods(savedMods, existingEntries);
@@ -284,6 +295,40 @@ namespace IEVRModManager
             {
                 selected.Enabled = !selected.Enabled;
                 SaveConfig();
+            }
+        }
+
+        private void ModLink_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is System.Windows.Controls.TextBlock tb &&
+                tb.DataContext is ModEntryViewModel vm)
+            {
+                var link = vm.ModLink?.Trim();
+                if (string.IsNullOrWhiteSpace(link))
+                {
+                    return;
+                }
+
+                if (!Uri.TryCreate(link, UriKind.Absolute, out var uri))
+                {
+                    MessageBox.Show("Invalid mod link.", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                try
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = uri.ToString(),
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Could not open the link: {ex.Message}", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
             }
         }
 
@@ -475,7 +520,8 @@ namespace IEVRModManager
                     DisplayName = me.DisplayName,
                     Author = me.Author,
                     ModVersion = me.ModVersion,
-                    GameVersion = me.GameVersion
+                GameVersion = me.GameVersion,
+                ModLink = me.ModLink
                 }).ToList();
 
                 var enabledMods = _modManager.GetEnabledMods(modEntries);
@@ -1006,6 +1052,7 @@ namespace IEVRModManager
         public string Author { get; set; } = string.Empty;
         public string ModVersion { get; set; } = string.Empty;
         public string GameVersion { get; set; } = string.Empty;
+        public string ModLink { get; set; } = string.Empty;
 
         public ModEntryViewModel(ModEntry mod)
         {
@@ -1015,6 +1062,7 @@ namespace IEVRModManager
             Author = mod.Author;
             ModVersion = string.IsNullOrEmpty(mod.ModVersion) ? "—" : mod.ModVersion;
             GameVersion = string.IsNullOrEmpty(mod.GameVersion) ? "—" : mod.GameVersion;
+            ModLink = mod.ModLink;
         }
 
         public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;

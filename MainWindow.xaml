@@ -84,9 +84,30 @@
                                     </GridViewColumn.CellTemplate>
                                 </GridViewColumn>
                                 <GridViewColumn Header="Mod Name" Width="280" DisplayMemberBinding="{Binding DisplayName}"/>
-                                <GridViewColumn Header="Version" Width="120" DisplayMemberBinding="{Binding ModVersion}"/>
-                                <GridViewColumn Header="Game Ver." Width="120" DisplayMemberBinding="{Binding GameVersion}"/>
-                                <GridViewColumn Header="Author" Width="200" DisplayMemberBinding="{Binding Author}"/>
+                                <GridViewColumn Header="Version" Width="80" DisplayMemberBinding="{Binding ModVersion}"/>
+                                <GridViewColumn Header="Game Ver." Width="90" DisplayMemberBinding="{Binding GameVersion}"/>
+                                <GridViewColumn Header="Author" Width="160" DisplayMemberBinding="{Binding Author}"/>
+                                <GridViewColumn Header="Link" Width="240">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding ModLink}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Cursor="Hand"
+                                                       MouseLeftButtonUp="ModLink_Click">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=ListViewItem}, Path=IsSelected}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
                             </GridView>
                         </ListView.View>
                     </ListView>
