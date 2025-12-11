@@ -2,11 +2,18 @@ using System;
 using System.IO;
 using System.Windows;
 using Microsoft.Win32;
+using IEVRModManager.Helpers;
 
 namespace IEVRModManager
 {
+    /// <summary>
+    /// Interaction logic for App.xaml. Provides application-level initialization and exception handling.
+    /// </summary>
     public partial class App : Application
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="App"/> class and sets up exception handlers.
+        /// </summary>
         public App()
         {
             DispatcherUnhandledException += OnDispatcherUnhandledException;
@@ -14,12 +21,25 @@ namespace IEVRModManager
             System.Threading.Tasks.TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
         }
 
+        /// <summary>
+        /// Called when the application starts. Initializes base directory, applies language and theme settings.
+        /// </summary>
+        /// <param name="e">The startup event arguments.</param>
         protected override void OnStartup(StartupEventArgs e)
         {
             EnsureBaseDirectory();
+            
+            // Initialize logger
+            var logger = Helpers.Logger.Instance;
+            logger.SetMinimumLevel(LogLevel.Info);
+            logger.SetFileLogging(true);
+#if DEBUG
+            logger.SetDebugLogging(true);
+#endif
+            
             ApplyLanguage();
             ApplyTheme();
-            StartupLog.Log("App starting.");
+            logger.Info("App starting.");
             base.OnStartup(e);
         }
 
@@ -27,20 +47,24 @@ namespace IEVRModManager
         {
             try
             {
-                // Load config to get language preference
                 var configManager = new Managers.ConfigManager();
                 var config = configManager.Load();
                 string language = string.IsNullOrWhiteSpace(config.Language) ? "System" : config.Language;
-                StartupLog.Log($"Applying language: {language}");
+                Helpers.Logger.Instance.Info($"Applying language: {language}");
                 Helpers.LocalizationHelper.SetLanguage(language);
                 
-                // Test that strings are loading
                 var testString = Helpers.LocalizationHelper.GetString("AppTitle");
-                StartupLog.Log($"Test string 'AppTitle' = '{testString}'");
+                Helpers.Logger.Instance.Debug($"Test string 'AppTitle' = '{testString}'");
+            }
+            catch (Exceptions.ConfigurationException ex)
+            {
+                Helpers.Logger.Instance.Error("Configuration error while applying language");
+                Helpers.Logger.Instance.Log(LogLevel.Error, "Configuration error details", ex);
             }
             catch (Exception ex)
             {
-                StartupLog.Log("Error applying language", ex);
+                Helpers.Logger.Instance.Error("Error applying language");
+                Helpers.Logger.Instance.Log(LogLevel.Error, "Error details", ex);
             }
         }
 
@@ -48,55 +72,40 @@ namespace IEVRModManager
         {
             try
             {
-                // Load config to get theme preference
                 var configManager = new Managers.ConfigManager();
                 var config = configManager.Load();
                 string theme = string.IsNullOrWhiteSpace(config.Theme) ? "System" : config.Theme;
 
-                // Determine which theme to use
-                string themeToUse;
-                if (theme == "System")
-                {
-                    // Detect system theme
-                    themeToUse = IsSystemThemeDark() ? "Dark" : "Light";
-                }
-                else
-                {
-                    themeToUse = theme;
-                }
+                string themeToUse = theme == "System" 
+                    ? (IsSystemThemeDark() ? "Dark" : "Light")
+                    : theme;
 
-                // Apply theme
-                var resources = Current.Resources;
-                resources.MergedDictionaries.Clear();
-
-                var themeDict = new ResourceDictionary();
-                if (themeToUse == "Light")
-                {
-                    themeDict.Source = new Uri("Themes/LightTheme.xaml", UriKind.Relative);
-                }
-                else
-                {
-                    themeDict.Source = new Uri("Themes/DarkTheme.xaml", UriKind.Relative);
-                }
-                resources.MergedDictionaries.Add(themeDict);
+                ApplyThemeResource(themeToUse);
             }
             catch (Exception ex)
             {
-                StartupLog.Log("Error applying theme", ex);
-                // Fallback to dark theme
-                var resources = Current.Resources;
-                resources.MergedDictionaries.Clear();
-                var themeDict = new ResourceDictionary();
-                themeDict.Source = new Uri("Themes/DarkTheme.xaml", UriKind.Relative);
-                resources.MergedDictionaries.Add(themeDict);
+                Helpers.Logger.Instance.Error("Error applying theme");
+                Helpers.Logger.Instance.Log(LogLevel.Error, "Error details", ex);
+                ApplyThemeResource("Dark");
             }
+        }
+
+        private void ApplyThemeResource(string themeName)
+        {
+            var resources = Current.Resources;
+            resources.MergedDictionaries.Clear();
+
+            var themeDict = new ResourceDictionary();
+            themeDict.Source = new Uri(
+                themeName == "Light" ? "Themes/LightTheme.xaml" : "Themes/DarkTheme.xaml",
+                UriKind.Relative);
+            resources.MergedDictionaries.Add(themeDict);
         }
 
         private bool IsSystemThemeDark()
         {
             try
             {
-                // Check Windows registry for theme preference
                 using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
                 {
                     if (key != null)
@@ -104,35 +113,34 @@ namespace IEVRModManager
                         var appsUseLightTheme = key.GetValue("AppsUseLightTheme");
                         if (appsUseLightTheme != null && appsUseLightTheme is int value)
                         {
-                            return value == 0; // 0 = dark theme, 1 = light theme
+                            return value == 0;
                         }
                     }
                 }
             }
             catch
             {
-                // If registry access fails, default to dark theme
             }
-            return true; // Default to dark theme
+            return true;
         }
 
 
         private static void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
-            StartupLog.Log("Dispatcher exception", e.Exception);
+            Helpers.Logger.Instance.Log(LogLevel.Error, "Dispatcher exception", e.Exception);
             MessageBox.Show($"Unhandled error:\n{e.Exception.Message}", "IEVR Mod Manager", MessageBoxButton.OK, MessageBoxImage.Error);
             e.Handled = true;
         }
 
         private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            StartupLog.Log("Domain unhandled exception", e.ExceptionObject as Exception);
+            Helpers.Logger.Instance.Log(LogLevel.Error, "Domain unhandled exception", e.ExceptionObject as Exception);
             MessageBox.Show("Unhandled error. See app.log in AppData.", "IEVR Mod Manager", MessageBoxButton.OK, MessageBoxImage.Error);
         }
 
         private static void OnUnobservedTaskException(object? sender, System.Threading.Tasks.UnobservedTaskExceptionEventArgs e)
         {
-            StartupLog.Log("Task unobserved exception", e.Exception);
+            Helpers.Logger.Instance.Log(LogLevel.Error, "Task unobserved exception", e.Exception);
             e.SetObserved();
         }
 
@@ -145,31 +153,19 @@ namespace IEVRModManager
             }
             catch (Exception ex)
             {
-                StartupLog.Log("Failed to ensure base directory", ex);
+                Helpers.Logger.Instance.Log(LogLevel.Error, "Failed to ensure base directory", ex);
             }
         }
-    }
 
-    internal static class StartupLog
-    {
-        private static readonly string LogPath = Path.Combine(Config.BaseDir, "app.log");
-
-        public static void Log(string message, Exception? ex = null)
+        /// <summary>
+        /// Called when the application is shutting down. Flushes and disposes the logger.
+        /// </summary>
+        /// <param name="e">The exit event arguments.</param>
+        protected override void OnExit(ExitEventArgs e)
         {
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
-                var text = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} - {message}";
-                if (ex != null)
-                {
-                    text += $"{Environment.NewLine}{ex}";
-                }
-                File.AppendAllText(LogPath, text + Environment.NewLine + Environment.NewLine);
-            }
-            catch
-            {
-                // ignore logging failures
-            }
+            Helpers.Logger.Instance.Flush();
+            Helpers.Logger.Instance.Dispose();
+            base.OnExit(e);
         }
     }
 }

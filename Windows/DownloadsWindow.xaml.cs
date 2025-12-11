@@ -7,8 +7,15 @@ using IEVRModManager.Helpers;
 
 namespace IEVRModManager.Windows
 {
+    /// <summary>
+    /// Interaction logic for DownloadsWindow.xaml. Displays download links for mods and tools.
+    /// </summary>
     public partial class DownloadsWindow : Window
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DownloadsWindow"/> class.
+        /// </summary>
+        /// <param name="parent">The parent window.</param>
         public DownloadsWindow(Window parent)
         {
             InitializeComponent();

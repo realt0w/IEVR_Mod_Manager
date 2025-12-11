@@ -43,20 +43,48 @@ namespace IEVRModManager
         private bool _vanillaSeedAttempted;
         private string? _previousProfileSelection;
         private static readonly DateTime VanillaFallbackCutoffUtc = new DateTime(2025, 12, 7, 0, 0, 0, DateTimeKind.Utc);
+        private static DateTime? _lastRateLimitHit;
+        private static readonly TimeSpan RateLimitCooldown = TimeSpan.FromMinutes(5);
         
         // Constants for CPK file names
         private const string VanillaCpkListFileName = "VanillaCpkList.cfg.bin";
         private const string LatestCpkListFileName = "LatestCpkList.cfg.bin";
         private const string CpkListFileName = "cpk_list.cfg.bin";
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MainWindow"/> class and sets up the mod manager interface.
+        /// </summary>
         public MainWindow()
         {
             InitializeComponent();
             
+            // Configure logger for UI output
+            var logger = Helpers.Logger.Instance;
+            logger.SetUICallback((message, level) =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    var formattedMessage = $"{message}\n";
+                    
+                    // Limit log size to prevent memory issues
+                    const int maxLogLines = 1000;
+                    var lines = LogTextBox.LineCount;
+                    if (lines > maxLogLines)
+                    {
+                        var startIndex = LogTextBox.GetCharacterIndexFromLineIndex(lines - maxLogLines);
+                        LogTextBox.Text = LogTextBox.Text.Substring(startIndex);
+                    }
+                    
+                    LogTextBox.AppendText(formattedMessage);
+                    LogTextBox.CaretIndex = LogTextBox.Text.Length;
+                    LogTextBox.ScrollToEnd();
+                });
+            });
+            
             _configManager = new ConfigManager();
             _modManager = new ModManager();
             _lastInstallManager = new LastInstallManager();
-            _viola = new ViolaIntegration(message => Log(message, "info"));
+            _viola = new ViolaIntegration(message => logger.Info(message));
             _profileManager = new Managers.ProfileManager();
             _modEntries = new ObservableCollection<ModEntryViewModel>();
             
@@ -103,12 +131,22 @@ namespace IEVRModManager
             StartUpdateCheckTimer();
             StartAppUpdateCheckTimer();
             _ = DownloadAndRefreshCpkListsAsync();
-            _ = GameBananaBrowserWindow.PrefetchModsAsync(this);
+            _ = PrefetchModsIfNeededAsync();
         }
 
         private void LoadConfig()
         {
             _config = _configManager.Load();
+            var lastCheck = _config.LastAppUpdateCheckUtc;
+            if (lastCheck != DateTime.MinValue)
+            {
+                var timeSinceLastCheck = DateTime.UtcNow - lastCheck;
+                System.Diagnostics.Debug.WriteLine($"[MainWindow] Loaded config - LastAppUpdateCheckUtc: {lastCheck:yyyy-MM-dd HH:mm:ss} UTC ({timeSinceLastCheck.TotalMinutes:F1} minutes ago)");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("[MainWindow] Loaded config - LastAppUpdateCheckUtc: never");
+            }
         }
 
         private void UpdateLocalizedTexts()
@@ -259,25 +297,41 @@ namespace IEVRModManager
                 return;
             }
 
-            var profile = _profileManager.LoadProfile(selectedProfileName);
-            if (profile != null)
+            try
             {
-                _previousProfileSelection = selectedProfileName;
-                LoadProfile(profile);
-                // Refresh to update the selector, but don't trigger selection change
-                _isRefreshingProfileSelector = true;
-                try
+                var profile = _profileManager.LoadProfile(selectedProfileName);
+                if (profile != null)
                 {
-                    ProfileSelector.SelectedItem = selectedProfileName;
+                    _previousProfileSelection = selectedProfileName;
+                    LoadProfile(profile);
+                    // Refresh to update the selector, but don't trigger selection change
+                    _isRefreshingProfileSelector = true;
+                    try
+                    {
+                        ProfileSelector.SelectedItem = selectedProfileName;
+                    }
+                    finally
+                    {
+                        _isRefreshingProfileSelector = false;
+                    }
                 }
-                finally
+                else
                 {
-                    _isRefreshingProfileSelector = false;
+                    // Profile not found, restore previous selection
+                    _isRefreshingProfileSelector = true;
+                    try
+                    {
+                        ProfileSelector.SelectedItem = _previousProfileSelection ?? LocalizationHelper.GetString("NoProfile");
+                    }
+                    finally
+                    {
+                        _isRefreshingProfileSelector = false;
+                    }
                 }
             }
-            else
+            catch (ArgumentException)
             {
-                // Profile not found, restore previous selection
+                // Invalid profile name, restore previous selection
                 _isRefreshingProfileSelector = true;
                 try
                 {
@@ -297,23 +351,31 @@ namespace IEVRModManager
                 return;
             }
 
-            var profile = _profileManager.LoadProfile(_config.LastAppliedProfile);
-            if (profile != null)
+            try
             {
-                // Update config with profile mods before ScanMods runs
-                // This ensures ScanMods uses the profile's mod state
-                _config.Mods = profile.Mods;
-                
-                if (!string.IsNullOrWhiteSpace(profile.SelectedCpkName))
+                var profile = _profileManager.LoadProfile(_config.LastAppliedProfile);
+                if (profile != null)
                 {
-                    _config.SelectedCpkName = profile.SelectedCpkName;
+                    // Update config with profile mods before ScanMods runs
+                    // This ensures ScanMods uses the profile's mod state
+                    _config.Mods = profile.Mods;
+                    
+                    if (!string.IsNullOrWhiteSpace(profile.SelectedCpkName))
+                    {
+                        _config.SelectedCpkName = profile.SelectedCpkName;
+                    }
+                    
+                    Log($"Last applied profile '{profile.Name}' will be loaded on startup.", "info");
                 }
-                
-                Log($"Last applied profile '{profile.Name}' will be loaded on startup.", "info");
+                else
+                {
+                    // Profile not found, clear the saved profile name
+                    _config.LastAppliedProfile = string.Empty;
+                }
             }
-            else
+            catch (ArgumentException)
             {
-                // Profile not found, clear the saved profile name
+                // Invalid profile name, clear it
                 _config.LastAppliedProfile = string.Empty;
             }
         }
@@ -325,55 +387,44 @@ namespace IEVRModManager
                 return;
             }
 
-            var profile = _profileManager.LoadProfile(_config.LastAppliedProfile);
-            if (profile != null)
+            try
             {
-                // Load profile silently (without showing confirmation)
-                var profileModMap = profile.Mods.ToDictionary(m => m.Name, m => m.Enabled);
-                
-                foreach (var modEntry in _modEntries)
+                var profile = _profileManager.LoadProfile(_config.LastAppliedProfile);
+                if (profile != null)
                 {
-                    if (profileModMap.ContainsKey(modEntry.Name))
+                    // Load profile silently (without showing confirmation)
+                    var profileModMap = profile.Mods.ToDictionary(m => m.Name, m => m.Enabled);
+                    
+                    foreach (var modEntry in _modEntries)
                     {
-                        modEntry.Enabled = profileModMap[modEntry.Name];
+                        if (profileModMap.ContainsKey(modEntry.Name))
+                        {
+                            modEntry.Enabled = profileModMap[modEntry.Name];
+                        }
+                        else
+                        {
+                            modEntry.Enabled = false;
+                        }
                     }
-                    else
+                    
+                    if (!string.IsNullOrWhiteSpace(profile.SelectedCpkName))
                     {
-                        modEntry.Enabled = false;
+                        _config.SelectedCpkName = profile.SelectedCpkName;
+                        RefreshCpkOptions();
                     }
+                    
+                    Log($"Last applied profile '{profile.Name}' loaded on startup.", "info");
                 }
-                
-                if (!string.IsNullOrWhiteSpace(profile.SelectedCpkName))
+                else
                 {
-                    _config.SelectedCpkName = profile.SelectedCpkName;
-                    RefreshCpkOptions();
+                    // Profile not found, clear the saved profile name
+                    _config.LastAppliedProfile = string.Empty;
                 }
-                
-                SaveConfig();
-                RefreshProfileSelector();
-                
-                // Set the selector to show the loaded profile
-                _isRefreshingProfileSelector = true;
-                try
-                {
-                    if (ProfileSelector.Items.Contains(profile.Name))
-                    {
-                        ProfileSelector.SelectedItem = profile.Name;
-                        _previousProfileSelection = profile.Name;
-                    }
-                }
-                finally
-                {
-                    _isRefreshingProfileSelector = false;
-                }
-                
-                Log($"Last applied profile '{profile.Name}' loaded on startup.", "info");
             }
-            else
+            catch (ArgumentException)
             {
-                // Profile not found, clear the saved profile name
+                // Invalid profile name, clear it
                 _config.LastAppliedProfile = string.Empty;
-                SaveConfig();
             }
         }
 
@@ -499,6 +550,11 @@ namespace IEVRModManager
             _config.CfgBinPath = string.Empty;
         }
 
+        /// <summary>
+        /// Creates a mod profile from the current state of enabled mods and selected CPK file.
+        /// </summary>
+        /// <param name="profileName">The name for the new profile.</param>
+        /// <returns>A new <see cref="ModProfile"/> containing the current mod configuration.</returns>
         public ModProfile CreateProfileFromCurrentState(string profileName)
         {
             var modData = _modEntries.Select(me => new ModData
@@ -516,6 +572,10 @@ namespace IEVRModManager
             };
         }
 
+        /// <summary>
+        /// Loads a mod profile and applies its mod configuration to the current state.
+        /// </summary>
+        /// <param name="profile">The profile to load.</param>
         public void LoadProfile(ModProfile profile)
         {
             // Create a map of profile mods
@@ -552,42 +612,42 @@ namespace IEVRModManager
 
         private void SaveConfig()
         {
-            var modData = _modEntries.Select(me => new ModData
+            try
             {
-                Name = me.Name,
-                Enabled = me.Enabled,
-                ModLink = me.ModLink
-            }).ToList();
-
-            var success = _configManager.Save(
-                _config.GamePath,
-                _config.SelectedCpkName,
-                _config.CfgBinPath,
-                _config.ViolaCliPath,
-                _config.TmpDir,
-                _modEntries.Select(me => new ModEntry
+                // Update mods list from current entries
+                _config.Mods = _modEntries.Select(me => new ModData
                 {
                     Name = me.Name,
-                    Path = Config.DefaultModsDir,
                     Enabled = me.Enabled,
-                    DisplayName = me.DisplayName,
-                    Author = me.Author,
-                    ModVersion = me.ModVersion,
-                    GameVersion = me.GameVersion,
                     ModLink = me.ModLink
-                }).ToList(),
-                _config.LastKnownPacksSignature,
-                _config.LastKnownSteamBuildId,
-                _config.VanillaFallbackUntilUtc,
-                _config.Theme,
-                _config.Language,
-                _config.LastAppliedProfile
-            );
+                }).ToList();
 
-            if (!success)
+                var success = _configManager.Save(_config);
+
+                if (!success)
+                {
+                    ShowError("CouldNotSaveConfiguration");
+                    Log("Could not save configuration.", "error");
+                }
+            }
+            catch (Exceptions.ConfigurationException ex)
             {
                 ShowError("CouldNotSaveConfiguration");
-                Log("Could not save configuration.", "error");
+                Log($"Configuration error: {ex.Message}", "error");
+                if (ex.InnerException != null)
+                {
+                    Log($"Inner exception: {ex.InnerException.Message}", "error");
+                }
+            }
+            catch (ArgumentNullException ex)
+            {
+                ShowError("CouldNotSaveConfiguration");
+                Log($"Invalid configuration: {ex.Message}", "error");
+            }
+            catch (Exception ex)
+            {
+                ShowError("CouldNotSaveConfiguration");
+                Log($"Unexpected error saving configuration: {ex.Message}", "error");
             }
         }
 
@@ -644,11 +704,58 @@ namespace IEVRModManager
 
         private async Task<int> DownloadCpkFilesAsync()
         {
+            // Check if we recently hit rate limit
+            if (_lastRateLimitHit.HasValue && DateTime.UtcNow - _lastRateLimitHit.Value < RateLimitCooldown)
+            {
+                var waitMinutes = Math.Ceiling((RateLimitCooldown - (DateTime.UtcNow - _lastRateLimitHit.Value)).TotalMinutes);
+                Log($"Skipping cpk_list download - rate limit cooldown active. Wait {waitMinutes} more minutes.", "info");
+                System.Diagnostics.Debug.WriteLine($"[CpkDownload] Skipping due to rate limit cooldown (hit at {_lastRateLimitHit.Value:HH:mm:ss}, wait {waitMinutes} min)");
+                return 0;
+            }
+
             const string apiUrl = "https://api.github.com/repos/Adr1GR/IEVR_Mod_Manager/contents/cpk_list";
             var targetDir = Config.SharedStorageCpkDir;
             Directory.CreateDirectory(targetDir);
 
+            System.Diagnostics.Debug.WriteLine($"[CpkDownload] Starting download of cpk_list files from GitHub API");
             using var response = await _httpClient.GetAsync(apiUrl);
+            
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                // Rate limit exceeded
+                var retryAfter = response.Headers.RetryAfter?.Delta?.TotalMinutes ?? 0;
+                var rateLimitRemaining = response.Headers.Contains("X-RateLimit-Remaining") 
+                    ? response.Headers.GetValues("X-RateLimit-Remaining").FirstOrDefault() 
+                    : "unknown";
+                var rateLimitReset = response.Headers.Contains("X-RateLimit-Reset")
+                    ? response.Headers.GetValues("X-RateLimit-Reset").FirstOrDefault()
+                    : null;
+
+                var errorMsg = "GitHub API rate limit exceeded. ";
+                if (retryAfter > 0)
+                {
+                    errorMsg += $"Please try again in approximately {Math.Ceiling(retryAfter)} minutes.";
+                }
+                else if (rateLimitReset != null && long.TryParse(rateLimitReset, out var resetTimestamp))
+                {
+                    var resetTime = DateTimeOffset.FromUnixTimeSeconds(resetTimestamp);
+                    var waitTime = resetTime - DateTimeOffset.UtcNow;
+                    if (waitTime.TotalMinutes > 0)
+                    {
+                        errorMsg += $"Please try again in approximately {Math.Ceiling(waitTime.TotalMinutes)} minutes.";
+                    }
+                }
+                else
+                {
+                    errorMsg += "Please try again later.";
+                }
+                
+                _lastRateLimitHit = DateTime.UtcNow;
+                Log(errorMsg, "error");
+                System.Diagnostics.Debug.WriteLine($"[CpkDownload] Rate limit hit at {_lastRateLimitHit.Value:HH:mm:ss}");
+                throw new HttpRequestException(errorMsg, null, response.StatusCode);
+            }
+            
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync();
 
@@ -661,12 +768,16 @@ namespace IEVRModManager
                 .Where(i => i.Type == "file" && (i.Name.EndsWith(".cfg.bin", StringComparison.OrdinalIgnoreCase) || i.Name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
+            System.Diagnostics.Debug.WriteLine($"[CpkDownload] Found {candidates.Count} cpk_list files to check");
             var downloaded = 0;
+            var skipped = 0;
             foreach (var item in candidates)
             {
                 var targetPath = Path.Combine(targetDir, item.Name);
                 if (File.Exists(targetPath))
                 {
+                    skipped++;
+                    System.Diagnostics.Debug.WriteLine($"[CpkDownload] Skipping {item.Name} (already exists)");
                     continue;
                 }
 
@@ -676,20 +787,114 @@ namespace IEVRModManager
                     downloadUrl = $"https://raw.githubusercontent.com/Adr1GR/IEVR_Mod_Manager/main/cpk_list/{item.Name}";
                 }
 
-                var bytes = await _httpClient.GetByteArrayAsync(downloadUrl);
-                await File.WriteAllBytesAsync(targetPath, bytes);
-                downloaded++;
+                try
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CpkDownload] Downloading {item.Name} from {downloadUrl}");
+                    using var fileResponse = await _httpClient.GetAsync(downloadUrl);
+                    if (fileResponse.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                    {
+                        // Rate limit on individual file download - stop all downloads
+                        _lastRateLimitHit = DateTime.UtcNow;
+                        var retryAfter = fileResponse.Headers.RetryAfter?.Delta?.TotalMinutes ?? 0;
+                        var errorMsg = $"Rate limit exceeded while downloading {item.Name}. Stopping downloads.";
+                        if (retryAfter > 0)
+                        {
+                            errorMsg += $" Please try again in approximately {Math.Ceiling(retryAfter)} minutes.";
+                        }
+                        Log(errorMsg, "error");
+                        System.Diagnostics.Debug.WriteLine($"[CpkDownload] Rate limit hit at {_lastRateLimitHit.Value:HH:mm:ss}. Downloaded: {downloaded}, Skipped: {skipped + (candidates.Count - downloaded - skipped - 1)}");
+                        break; // Stop downloading remaining files
+                    }
+                    fileResponse.EnsureSuccessStatusCode();
+                    var bytes = await fileResponse.Content.ReadAsByteArrayAsync();
+                    await File.WriteAllBytesAsync(targetPath, bytes);
+                    downloaded++;
+                    System.Diagnostics.Debug.WriteLine($"[CpkDownload] Successfully downloaded {item.Name} ({bytes.Length} bytes)");
+                }
+                catch (HttpRequestException ex)
+                {
+                    // Log but continue with other files (unless it's a rate limit, which we handle above)
+                    Log($"Error downloading {item.Name}: {ex.Message}", "warning");
+                    System.Diagnostics.Debug.WriteLine($"[CpkDownload] Error downloading {item.Name}: {ex.Message}");
+                    continue;
+                }
             }
 
+            System.Diagnostics.Debug.WriteLine($"[CpkDownload] Completed. Downloaded: {downloaded}, Skipped: {skipped}");
             return downloaded;
         }
 
-        private async Task DownloadAndRefreshCpkListsAsync()
+        private async Task DownloadAndRefreshCpkListsAsync(bool forceCheck = false)
         {
             if (_isDownloadingCpkLists)
             {
                 Log("Already downloading cpk_list files, please wait.", "info");
                 return;
+            }
+
+            // If forceCheck is true (manual button click), always download
+            if (!forceCheck)
+            {
+                // Check if we have any cpk_list files downloaded
+                var cpkDir = Config.SharedStorageCpkDir;
+                var hasCpkFiles = Directory.Exists(cpkDir) && 
+                    Directory.GetFiles(cpkDir, "*.bin", SearchOption.TopDirectoryOnly)
+                        .Concat(Directory.GetFiles(cpkDir, "*.cfg.bin", SearchOption.TopDirectoryOnly))
+                        .Any();
+
+                // If no cpk files exist, proceed to download
+                if (!hasCpkFiles)
+                {
+                    System.Diagnostics.Debug.WriteLine("[CpkDownload] No cpk files found, proceeding to download.");
+                }
+                // If we have cpk files, check if signature has changed
+                else
+                {
+                    // Check if signature has changed (like when copying latest)
+                    var signatureChanged = false;
+                    if (!string.IsNullOrWhiteSpace(_config.GamePath) && Directory.Exists(_config.GamePath))
+                    {
+                        try
+                        {
+                            var currentSignature = await Task.Run(() => ComputeGameSignature(_config.GamePath));
+                            signatureChanged = !string.IsNullOrWhiteSpace(currentSignature) &&
+                                !string.IsNullOrWhiteSpace(_config.LastKnownPacksSignature) &&
+                                !string.Equals(currentSignature, _config.LastKnownPacksSignature, StringComparison.Ordinal);
+                            
+                            if (signatureChanged)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[CpkDownload] Signature changed detected - current: {currentSignature.Substring(0, Math.Min(8, currentSignature.Length))}..., last: {_config.LastKnownPacksSignature.Substring(0, Math.Min(8, _config.LastKnownPacksSignature.Length))}...");
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine("[CpkDownload] No signature change detected, skipping download to avoid API calls.");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[CpkDownload] Error computing signature: {ex.Message}");
+                            // If we can't compute signature and we have cpk files, skip download to avoid API calls
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        // No GamePath configured, but we have cpk files - skip automatic download
+                        System.Diagnostics.Debug.WriteLine("[CpkDownload] GamePath not configured, skipping automatic download (cpk files already exist).");
+                        return;
+                    }
+
+                    // Only download if signature changed
+                    if (!signatureChanged)
+                    {
+                        System.Diagnostics.Debug.WriteLine("[CpkDownload] Skipping automatic check - no signature change detected and cpk files already exist.");
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("[CpkDownload] Force check requested (manual button click), proceeding to download");
             }
 
             _isDownloadingCpkLists = true;
@@ -713,10 +918,16 @@ namespace IEVRModManager
                 await EnsureLatestCpkExistsAsync();
                 
                 RefreshCpkOptions();
+                
+                // Update last check time only if download was successful (or no files needed downloading)
+                _config.LastCpkListCheckUtc = DateTime.UtcNow;
+                SaveConfig();
+                System.Diagnostics.Debug.WriteLine($"[CpkDownload] Updated last check time to {_config.LastCpkListCheckUtc:HH:mm:ss}");
             }
             catch (Exception ex)
             {
                 Log($"Error downloading cpk_list files: {ex.Message}", "error");
+                // Don't update last check time on error, so it will retry sooner
             }
             finally
             {
@@ -816,6 +1027,11 @@ namespace IEVRModManager
             }
         }
 
+        /// <summary>
+        /// Handles the click event for downloading CPK list files from GitHub.
+        /// </summary>
+        /// <param name="sender">The event sender.</param>
+        /// <param name="e">The routed event arguments.</param>
         public async void DownloadCpkLists_Click(object sender, RoutedEventArgs e)
         {
             if (sender is System.Windows.Controls.Button button)
@@ -825,7 +1041,8 @@ namespace IEVRModManager
 
             try
             {
-                await DownloadAndRefreshCpkListsAsync();
+                // Force check when manually triggered by button click
+                await DownloadAndRefreshCpkListsAsync(forceCheck: true);
             }
             finally
             {
@@ -1109,15 +1326,22 @@ namespace IEVRModManager
                         var successWindow = new SuccessMessageWindow(this, LocalizationHelper.GetString("OriginalGameFilesRestored"));
                         successWindow.ShowDialog();
 
-                        _lastInstallManager.Save(new LastInstallInfo
+                        try
                         {
-                            GamePath = Path.GetFullPath(_config.GamePath),
-                            Files = new List<string>(),
-                            Mods = new List<string>(),
-                            AppliedAt = DateTime.UtcNow,
-                            SelectedCpkName = _config.SelectedCpkName ?? string.Empty,
-                            SelectedCpkInfo = GetCpkInfo(_config.CfgBinPath)
-                        });
+                            _lastInstallManager.Save(new LastInstallInfo
+                            {
+                                GamePath = Path.GetFullPath(_config.GamePath),
+                                Files = new List<string>(),
+                                Mods = new List<string>(),
+                                AppliedAt = DateTime.UtcNow,
+                                SelectedCpkName = _config.SelectedCpkName ?? string.Empty,
+                                SelectedCpkInfo = GetCpkInfo(_config.CfgBinPath)
+                            });
+                        }
+                        catch (Exceptions.ModManagerException ex)
+                        {
+                            Log($"Error saving last install info: {ex.Message}", "error");
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -1399,12 +1623,28 @@ namespace IEVRModManager
 
             if (Directory.Exists(backupRoot))
             {
-                Log("Backup folder already exists; skipping backup creation.", "info");
                 if (showMessageOnExisting)
                 {
-                    ShowMessage("BackupAlreadyExistsTitle", "BackupAlreadyExistsMessage", Windows.MessageType.Info);
+                    // User already confirmed, so delete the old backup and create a new one
+                    Log("Backup folder already exists; deleting old backup to create a new one.", "info");
+                    try
+                    {
+                        Directory.Delete(backupRoot, true);
+                        Log("Old backup deleted successfully.", "info");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Error deleting old backup: {ex.Message}", "error");
+                        ShowError("ErrorDeletingBackup", ex.Message);
+                        return false;
+                    }
                 }
-                return true;
+                else
+                {
+                    // User hasn't confirmed yet, just skip
+                    Log("Backup folder already exists; skipping backup creation.", "info");
+                    return true;
+                }
             }
 
             try
@@ -1611,15 +1851,22 @@ namespace IEVRModManager
                         ? LocalizationHelper.GetString("OneModAppliedSuccessfully")
                         : string.Format(LocalizationHelper.GetString("ModsAppliedSuccessfullyFormat"), modCount);
                     
-                    _lastInstallManager.Save(new LastInstallInfo
+                    try
                     {
-                        GamePath = Path.GetFullPath(gamePath),
-                        Files = mergedFiles,
-                        Mods = modNames,
-                        AppliedAt = DateTime.UtcNow,
-                        SelectedCpkName = _config.SelectedCpkName ?? string.Empty,
-                        SelectedCpkInfo = GetCpkInfo(_config.CfgBinPath)
-                    });
+                        _lastInstallManager.Save(new LastInstallInfo
+                        {
+                            GamePath = Path.GetFullPath(gamePath),
+                            Files = mergedFiles,
+                            Mods = modNames,
+                            AppliedAt = DateTime.UtcNow,
+                            SelectedCpkName = _config.SelectedCpkName ?? string.Empty,
+                            SelectedCpkInfo = GetCpkInfo(_config.CfgBinPath)
+                        });
+                    }
+                    catch (Exceptions.ModManagerException ex)
+                    {
+                        Log($"Error saving last install info: {ex.Message}", "error");
+                    }
 
                     Dispatcher.Invoke(() =>
                     {
@@ -1778,6 +2025,11 @@ namespace IEVRModManager
             window.ShowDialog();
         }
 
+        /// <summary>
+        /// Logs a message with the specified level.
+        /// </summary>
+        /// <param name="message">The message to log.</param>
+        /// <param name="level">The log level (e.g., "info", "error", "warning").</param>
         public void LogMessage(string message, string level = "info")
         {
             Log(message, level);
@@ -1869,24 +2121,19 @@ namespace IEVRModManager
 
         private void Log(string message, string level = "info")
         {
-            Dispatcher.Invoke(() =>
+            var logger = Helpers.Logger.Instance;
+            var logLevel = level.ToLower() switch
             {
-                var timestamp = DateTime.Now.ToString("HH:mm:ss");
-                var formattedMessage = $"[{timestamp}] {message}\n";
-                
-                // Limit log size to prevent memory issues
-                const int maxLogLines = 1000;
-                var lines = LogTextBox.LineCount;
-                if (lines > maxLogLines)
-                {
-                    var startIndex = LogTextBox.GetCharacterIndexFromLineIndex(lines - maxLogLines);
-                    LogTextBox.Text = LogTextBox.Text.Substring(startIndex);
-                }
-                
-                LogTextBox.AppendText(formattedMessage);
-                LogTextBox.CaretIndex = LogTextBox.Text.Length;
-                LogTextBox.ScrollToEnd();
-            });
+                "debug" => LogLevel.Debug,
+                "info" => LogLevel.Info,
+                "warning" => LogLevel.Warning,
+                "warn" => LogLevel.Warning,
+                "error" => LogLevel.Error,
+                "success" => LogLevel.Info, // Treat success as info
+                _ => LogLevel.Info
+            };
+            
+            logger.Log(logLevel, message);
         }
 
         // Helper methods for showing message windows
@@ -2394,17 +2641,63 @@ namespace IEVRModManager
         {
             if (_isCheckingAppUpdates)
             {
+                System.Diagnostics.Debug.WriteLine("[AppUpdate] Already checking for updates, skipping duplicate call");
                 return;
+            }
+
+            // Check if at least 1 hour has passed since last automatic check
+            // Only skip automatic checks (when showNoUpdateMessage is false), not manual checks
+            if (!showNoUpdateMessage)
+            {
+                // Reload config to get the latest LastAppUpdateCheckUtc value
+                var currentConfig = _configManager.Load();
+                var lastCheck = currentConfig.LastAppUpdateCheckUtc;
+                
+                // Check if lastCheck is valid (not MinValue and not default)
+                var isValidLastCheck = lastCheck != DateTime.MinValue && 
+                                       lastCheck.Year > 1 && 
+                                       lastCheck != default(DateTime);
+                
+                if (isValidLastCheck)
+                {
+                    var timeSinceLastCheck = DateTime.UtcNow - lastCheck;
+                    var lastCheckInfo = $"{timeSinceLastCheck.TotalMinutes:F1} minutes ago";
+                    Log($"[AppUpdate] Last check was at: {lastCheck:yyyy-MM-dd HH:mm:ss} UTC ({lastCheckInfo})", "info");
+                    
+                    if (timeSinceLastCheck.TotalHours < 1.0)
+                    {
+                        var minutesRemaining = Math.Ceiling(60 - timeSinceLastCheck.TotalMinutes);
+                        Log($"[AppUpdate] Skipping automatic check - last check was {timeSinceLastCheck.TotalMinutes:F1} minutes ago. Next check in {minutesRemaining} minutes.", "info");
+                        return;
+                    }
+                }
+                else
+                {
+                    Log($"[AppUpdate] Last check was never (or invalid). Proceeding with check.", "info");
+                }
             }
 
             _isCheckingAppUpdates = true;
             try
             {
+                System.Diagnostics.Debug.WriteLine("[AppUpdate] Starting update check");
                 var currentVersion = Managers.AppUpdateManager.GetCurrentVersion();
+                Log($"Current version: {currentVersion}", "info");
+                
                 var releaseInfo = await Managers.AppUpdateManager.CheckForUpdatesAsync();
+
+                // Save the check time after attempting the check (even if it failed)
+                var checkTime = DateTime.UtcNow;
+                _config.LastAppUpdateCheckUtc = checkTime;
+                _configManager.UpdateLastAppUpdateCheckUtc(checkTime);
+                Log($"[AppUpdate] Saved check time: {checkTime:yyyy-MM-dd HH:mm:ss} UTC", "info");
+                
+                // Reload config to keep in-memory config in sync
+                _config = _configManager.Load();
 
                 if (releaseInfo == null)
                 {
+                    Log("No release info found from GitHub API", "error");
                     if (showNoUpdateMessage)
                     {
                         ShowError("UpdateCheckFailed");
@@ -2413,7 +2706,10 @@ namespace IEVRModManager
                 }
 
                 var latestVersion = releaseInfo.TagName.TrimStart('v', 'V');
+                Log($"Latest version from GitHub: {releaseInfo.TagName} (parsed as: {latestVersion})", "info");
+                
                 var isNewer = Managers.AppUpdateManager.IsNewerVersion(currentVersion, latestVersion);
+                Log($"Is newer version? {isNewer} (current: {currentVersion}, latest: {latestVersion})", "info");
 
                 if (isNewer)
                 {
@@ -2431,6 +2727,7 @@ namespace IEVRModManager
             catch (Exception ex)
             {
                 Log($"Error checking for app updates: {ex.Message}", "error");
+                Log($"Stack trace: {ex.StackTrace}", "error");
                 if (showNoUpdateMessage)
                 {
                     ShowError("UpdateCheckFailed");
@@ -2439,6 +2736,35 @@ namespace IEVRModManager
             finally
             {
                 _isCheckingAppUpdates = false;
+            }
+        }
+
+        private async Task PrefetchModsIfNeededAsync()
+        {
+            try
+            {
+                // Check if at least 1 hour has passed since last prefetch
+                var lastPrefetch = _config.LastModPrefetchUtc;
+                var timeSinceLastPrefetch = DateTime.UtcNow - lastPrefetch;
+                
+                if (lastPrefetch != DateTime.MinValue && timeSinceLastPrefetch.TotalHours < 1.0)
+                {
+                    var minutesRemaining = Math.Ceiling(60 - timeSinceLastPrefetch.TotalMinutes);
+                    System.Diagnostics.Debug.WriteLine($"[ModPrefetch] Skipping prefetch - last prefetch was {timeSinceLastPrefetch.TotalMinutes:F1} minutes ago. Next prefetch in {minutesRemaining} minutes.");
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine("[ModPrefetch] Starting mod prefetch");
+                await Windows.GameBananaBrowserWindow.PrefetchModsAsync(this);
+                
+                // Save the prefetch time after successful prefetch
+                _config.LastModPrefetchUtc = DateTime.UtcNow;
+                _configManager.UpdateLastModPrefetchUtc(_config.LastModPrefetchUtc);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ModPrefetch] Error during prefetch: {ex.Message}");
+                // Don't save prefetch time on error, so it will retry on next startup
             }
         }
 
@@ -2522,12 +2848,21 @@ namespace IEVRModManager
         }
     }
 
+    /// <summary>
+    /// ViewModel for displaying mod entry information in the UI.
+    /// </summary>
     public class ModEntryViewModel : System.ComponentModel.INotifyPropertyChanged
     {
         private bool _enabled;
 
+        /// <summary>
+        /// Gets or sets the mod directory name.
+        /// </summary>
         public string Name { get; set; } = string.Empty;
         
+        /// <summary>
+        /// Gets or sets whether the mod is enabled.
+        /// </summary>
         public bool Enabled
         {
             get => _enabled;
@@ -2539,13 +2874,40 @@ namespace IEVRModManager
             }
         }
         
+        /// <summary>
+        /// Gets the icon string indicating enabled status (✓ or ✗).
+        /// </summary>
         public string EnabledIcon => Enabled ? "✓" : "✗";
+        
+        /// <summary>
+        /// Gets or sets the display name of the mod.
+        /// </summary>
         public string DisplayName { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the author of the mod.
+        /// </summary>
         public string Author { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the mod version.
+        /// </summary>
         public string ModVersion { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the game version this mod targets.
+        /// </summary>
         public string GameVersion { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the link to the mod.
+        /// </summary>
         public string ModLink { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ModEntryViewModel"/> class from a <see cref="ModEntry"/>.
+        /// </summary>
+        /// <param name="mod">The mod entry to create the view model from.</param>
         public ModEntryViewModel(ModEntry mod)
         {
             Name = mod.Name;
@@ -2557,17 +2919,34 @@ namespace IEVRModManager
             ModLink = mod.ModLink;
         }
 
+        /// <summary>
+        /// Occurs when a property value changes.
+        /// </summary>
         public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 
+        /// <summary>
+        /// Raises the <see cref="PropertyChanged"/> event.
+        /// </summary>
+        /// <param name="propertyName">The name of the property that changed.</param>
         protected virtual void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
         }
     }
 
+    /// <summary>
+    /// Represents a CPK file option for selection in the UI.
+    /// </summary>
     public class CpkOption
     {
+        /// <summary>
+        /// Gets or sets the file name of the CPK file.
+        /// </summary>
         public string FileName { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets the formatted display name for the CPK file, removing suffixes and formatting for display.
+        /// </summary>
         public string DisplayName
         {
             get
@@ -2589,10 +2968,24 @@ namespace IEVRModManager
         }
     }
 
+    /// <summary>
+    /// Represents content from GitHub API (files or directories).
+    /// </summary>
     public class GithubContent
     {
+        /// <summary>
+        /// Gets or sets the name of the content item.
+        /// </summary>
         public string Name { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the type of content (e.g., "file" or "dir").
+        /// </summary>
         public string Type { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the download URL for the content.
+        /// </summary>
         [JsonPropertyName("download_url")]
         public string DownloadUrl { get; set; } = string.Empty;
     }

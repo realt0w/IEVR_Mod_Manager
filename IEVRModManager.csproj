@@ -17,6 +17,7 @@
     <SelfContained>false</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,6 +37,12 @@
     <None Update="Resources\Strings.es-ES.yaml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="IEVRModManager.Tests\**" />
+    <EmbeddedResource Remove="IEVRModManager.Tests\**" />
+    <None Remove="IEVRModManager.Tests\**" />
   </ItemGroup>
 
 </Project>

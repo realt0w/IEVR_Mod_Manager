@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 
 namespace IEVRModManager.Managers
 {
+    /// <summary>
+    /// Provides integration with the Viola CLI tool for merging mods.
+    /// </summary>
     public class ViolaIntegration
     {
         private readonly Action<string> _logCallback;
@@ -15,12 +18,25 @@ namespace IEVRModManager.Managers
         private Process? _currentProcess;
         private bool _isRunning;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ViolaIntegration"/> class.
+        /// </summary>
+        /// <param name="logCallback">Optional callback for log messages.</param>
+        /// <param name="progressCallback">Optional callback for progress updates (progress percentage, status message).</param>
         public ViolaIntegration(Action<string>? logCallback = null, Action<int, string>? progressCallback = null)
         {
             _logCallback = logCallback ?? (_ => { });
             _progressCallback = progressCallback;
         }
 
+        /// <summary>
+        /// Merges multiple mods using the Viola CLI tool.
+        /// </summary>
+        /// <param name="violaCliPath">The path to the violacli.exe executable.</param>
+        /// <param name="cfgBinPath">The path to the cpk_list.cfg.bin configuration file.</param>
+        /// <param name="modPaths">The list of mod directory paths to merge.</param>
+        /// <param name="outputDir">The output directory where merged files will be placed.</param>
+        /// <returns><c>true</c> if the merge operation completed successfully; otherwise, <c>false</c>.</returns>
         public async Task<bool> MergeModsAsync(string violaCliPath, string cfgBinPath,
             List<string> modPaths, string outputDir)
         {
@@ -166,6 +182,12 @@ namespace IEVRModManager.Managers
             _isRunning = false;
         }
 
+        /// <summary>
+        /// Copies merged files from the temporary directory to the game data directory.
+        /// </summary>
+        /// <param name="tmpDataDir">The temporary directory containing merged files.</param>
+        /// <param name="gameDataDir">The game data directory where files will be copied.</param>
+        /// <returns><c>true</c> if the copy operation completed successfully; otherwise, <c>false</c>.</returns>
         public bool CopyMergedFiles(string tmpDataDir, string gameDataDir)
         {
             if (!Directory.Exists(tmpDataDir))
@@ -197,6 +219,11 @@ namespace IEVRModManager.Managers
             }
         }
 
+        /// <summary>
+        /// Cleans up the temporary directory by deleting its contents and recreating it.
+        /// </summary>
+        /// <param name="tmpDir">The temporary directory to clean up.</param>
+        /// <returns><c>true</c> if the cleanup completed successfully; otherwise, <c>false</c>.</returns>
         public bool CleanupTemp(string tmpDir)
         {
             try
@@ -216,8 +243,14 @@ namespace IEVRModManager.Managers
             }
         }
 
+        /// <summary>
+        /// Gets a value indicating whether a merge operation is currently running.
+        /// </summary>
         public bool IsRunning => _isRunning;
 
+        /// <summary>
+        /// Stops the current merge operation if one is running.
+        /// </summary>
         public void Stop()
         {
             if (_currentProcess != null && !_currentProcess.HasExited)

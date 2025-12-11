@@ -6,12 +6,21 @@ using IEVRModManager.Managers;
 
 namespace IEVRModManager.Windows
 {
+    /// <summary>
+    /// Interaction logic for AppUpdateWindow.xaml. Displays update information and allows downloading updates.
+    /// </summary>
     public partial class AppUpdateWindow : Window
     {
         private readonly AppUpdateManager.ReleaseInfo _releaseInfo;
         private readonly string _currentVersion;
         private bool _isDownloading;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AppUpdateWindow"/> class.
+        /// </summary>
+        /// <param name="owner">The owner window.</param>
+        /// <param name="releaseInfo">The release information to display.</param>
+        /// <param name="currentVersion">The current application version.</param>
         public AppUpdateWindow(Window owner, AppUpdateManager.ReleaseInfo releaseInfo, string currentVersion)
         {
             InitializeComponent();
@@ -85,10 +94,16 @@ namespace IEVRModManager.Windows
 
                     if (result == MessageBoxResult.Yes)
                     {
+                        // Start the update script and then shutdown
+                        AppUpdateManager.ApplyUpdate();
+                        // Give the script more time to start and begin waiting before shutting down
+                        await System.Threading.Tasks.Task.Delay(2000);
                         Application.Current.Shutdown();
                     }
                     else
                     {
+                        // User chose not to restart - clear the pending update script
+                        // The downloaded file will remain in temp folder for manual installation if needed
                         Close();
                     }
                 }

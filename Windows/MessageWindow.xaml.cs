@@ -4,24 +4,66 @@ using IEVRModManager.Helpers;
 
 namespace IEVRModManager.Windows
 {
+    /// <summary>
+    /// Specifies the type of message to display.
+    /// </summary>
     public enum MessageType
     {
+        /// <summary>
+        /// Informational message.
+        /// </summary>
         Info,
+        
+        /// <summary>
+        /// Error message.
+        /// </summary>
         Error,
+        
+        /// <summary>
+        /// Warning message.
+        /// </summary>
         Warning,
+        
+        /// <summary>
+        /// Success message.
+        /// </summary>
         Success
     }
 
+    /// <summary>
+    /// Specifies the button configuration for the message window.
+    /// </summary>
     public enum MessageButtons
     {
+        /// <summary>
+        /// Shows only an OK button.
+        /// </summary>
         OK,
+        
+        /// <summary>
+        /// Shows Yes and No buttons.
+        /// </summary>
         YesNo
     }
 
+    /// <summary>
+    /// Interaction logic for MessageWindow.xaml. Displays messages to the user with various types and button configurations.
+    /// </summary>
     public partial class MessageWindow : Window
     {
+        /// <summary>
+        /// Gets the result of the dialog (true for Yes/OK, false for No/Cancel, null if not set).
+        /// </summary>
         public bool? Result { get; private set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MessageWindow"/> class.
+        /// </summary>
+        /// <param name="parent">The parent window.</param>
+        /// <param name="title">The window title.</param>
+        /// <param name="message">The message to display.</param>
+        /// <param name="type">The type of message.</param>
+        /// <param name="buttons">The button configuration.</param>
         public MessageWindow(Window parent, string title, string message, MessageType type = MessageType.Info, MessageButtons buttons = MessageButtons.OK)
         {
             InitializeComponent();

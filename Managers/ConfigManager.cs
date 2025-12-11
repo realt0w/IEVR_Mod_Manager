@@ -3,19 +3,33 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using IEVRModManager.Models;
+using IEVRModManager.Helpers;
+using IEVRModManager.Exceptions;
+using static IEVRModManager.Helpers.Logger;
 
 namespace IEVRModManager.Managers
 {
+    /// <summary>
+    /// Manages loading and saving of application configuration.
+    /// </summary>
     public class ConfigManager
     {
         private readonly string _configPath;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ConfigManager"/> class.
+        /// </summary>
         public ConfigManager()
         {
             _configPath = Config.ConfigPath;
-            EnsureDirectoryExists(Path.GetDirectoryName(_configPath));
+            FileSystemHelper.EnsureDirectoryExists(Path.GetDirectoryName(_configPath));
         }
 
+        /// <summary>
+        /// Loads the application configuration from disk.
+        /// </summary>
+        /// <returns>An <see cref="AppConfig"/> instance. Returns default configuration if file doesn't exist or is invalid.</returns>
+        /// <exception cref="ConfigurationException">Thrown when there's an error reading or parsing the configuration file.</exception>
         public AppConfig Load()
         {
             if (!File.Exists(_configPath))
@@ -26,6 +40,11 @@ namespace IEVRModManager.Managers
             try
             {
                 var json = File.ReadAllText(_configPath);
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    return AppConfig.Default();
+                }
+
                 var config = JsonSerializer.Deserialize<AppConfig>(json, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
@@ -36,107 +55,123 @@ namespace IEVRModManager.Managers
                     return AppConfig.Default();
                 }
 
-                // Migrate configuration to ensure all new properties are added
-                // This detects missing properties from old config files and adds them with default values
-                // The migrated config is automatically saved if changes are detected
                 return MigrateConfig(config, json);
+            }
+            catch (JsonException ex)
+            {
+                Instance.Log(LogLevel.Error, "Error parsing config JSON", ex);
+                throw new ConfigurationException("Failed to parse configuration file. The file may be corrupted.", ex);
+            }
+            catch (IOException ex)
+            {
+                Instance.Log(LogLevel.Error, "IO error loading config", ex);
+                throw new ConfigurationException("Failed to read configuration file. Check file permissions.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Instance.Log(LogLevel.Error, "Access denied loading config", ex);
+                throw new ConfigurationException("Access denied to configuration file.", ex);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error loading config: {ex.Message}");
-                return AppConfig.Default();
+                Instance.Log(LogLevel.Error, "Unexpected error loading config", ex);
+                throw new ConfigurationException("An unexpected error occurred while loading configuration.", ex);
             }
         }
 
         private AppConfig MigrateConfig(AppConfig loadedConfig, string originalJson)
         {
+            if (loadedConfig == null)
+            {
+                throw new ArgumentNullException(nameof(loadedConfig));
+            }
+
+            if (string.IsNullOrWhiteSpace(originalJson))
+            {
+                return loadedConfig;
+            }
+
             var defaultConfig = AppConfig.Default();
             var migrated = false;
 
-            // Check if JSON contains new properties by parsing it
-            using var jsonDoc = JsonDocument.Parse(originalJson);
-            var root = jsonDoc.RootElement;
-
-            // Migrate properties that might be missing from old config files
-            // Check TmpDir - new property that might not exist in old configs
-            if (!root.TryGetProperty("TmpDir", out _) || string.IsNullOrWhiteSpace(loadedConfig.TmpDir))
+            JsonDocument? jsonDoc = null;
+            try
             {
-                loadedConfig.TmpDir = defaultConfig.TmpDir;
-                migrated = true;
-            }
+                jsonDoc = JsonDocument.Parse(originalJson);
+                var root = jsonDoc.RootElement;
 
-            // Check Theme - new property that might not exist in old configs
-            if (!root.TryGetProperty("Theme", out _) || string.IsNullOrWhiteSpace(loadedConfig.Theme))
-            {
-                loadedConfig.Theme = defaultConfig.Theme;
-                migrated = true;
-            }
+            migrated |= MigrateStringProperty(root, "TmpDir", () => loadedConfig.TmpDir, 
+                value => loadedConfig.TmpDir = value, defaultConfig.TmpDir);
+            migrated |= MigrateStringProperty(root, "Theme", () => loadedConfig.Theme, 
+                value => loadedConfig.Theme = value, defaultConfig.Theme);
+            migrated |= MigrateStringProperty(root, "Language", () => loadedConfig.Language, 
+                value => loadedConfig.Language = value, defaultConfig.Language);
+            migrated |= MigrateStringProperty(root, "LastAppliedProfile", () => loadedConfig.LastAppliedProfile, 
+                value => loadedConfig.LastAppliedProfile = value, defaultConfig.LastAppliedProfile);
 
-            // Check Language - new property that might not exist in old configs
-            if (!root.TryGetProperty("Language", out _) || string.IsNullOrWhiteSpace(loadedConfig.Language))
-            {
-                loadedConfig.Language = defaultConfig.Language;
-                migrated = true;
-            }
+            migrated |= MigrateDateTimeProperty(root, "LastCpkListCheckUtc", () => loadedConfig.LastCpkListCheckUtc, 
+                value => loadedConfig.LastCpkListCheckUtc = value, defaultConfig.LastCpkListCheckUtc);
+            migrated |= MigrateDateTimeProperty(root, "LastAppUpdateCheckUtc", () => loadedConfig.LastAppUpdateCheckUtc, 
+                value => loadedConfig.LastAppUpdateCheckUtc = value, defaultConfig.LastAppUpdateCheckUtc);
+            migrated |= MigrateDateTimeProperty(root, "LastModPrefetchUtc", () => loadedConfig.LastModPrefetchUtc, 
+                value => loadedConfig.LastModPrefetchUtc = value, defaultConfig.LastModPrefetchUtc);
 
-            // Check LastAppliedProfile - new property that might not exist in old configs
-            if (!root.TryGetProperty("LastAppliedProfile", out _) || string.IsNullOrWhiteSpace(loadedConfig.LastAppliedProfile))
-            {
-                loadedConfig.LastAppliedProfile = defaultConfig.LastAppliedProfile;
-                migrated = true;
-            }
-
-            // Ensure Mods list is initialized if null or missing
             if (!root.TryGetProperty("Mods", out _) || loadedConfig.Mods == null)
             {
                 loadedConfig.Mods = new List<ModData>();
                 migrated = true;
             }
 
-            // Ensure other string properties are not null (defensive check for corrupted configs)
-            if (loadedConfig.GamePath == null)
+            var stringProperties = new[]
             {
-                loadedConfig.GamePath = string.Empty;
-                migrated = true;
+                new { Getter = (Func<string?>)(() => loadedConfig.GamePath), Setter = (Action<string>)(v => loadedConfig.GamePath = v) },
+                new { Getter = (Func<string?>)(() => loadedConfig.CfgBinPath), Setter = (Action<string>)(v => loadedConfig.CfgBinPath = v) },
+                new { Getter = (Func<string?>)(() => loadedConfig.ViolaCliPath), Setter = (Action<string>)(v => loadedConfig.ViolaCliPath = v) },
+                new { Getter = (Func<string?>)(() => loadedConfig.SelectedCpkName), Setter = (Action<string>)(v => loadedConfig.SelectedCpkName = v) },
+                new { Getter = (Func<string?>)(() => loadedConfig.LastKnownPacksSignature), Setter = (Action<string>)(v => loadedConfig.LastKnownPacksSignature = v) },
+                new { Getter = (Func<string?>)(() => loadedConfig.LastKnownSteamBuildId), Setter = (Action<string>)(v => loadedConfig.LastKnownSteamBuildId = v) }
+            };
+
+            foreach (var prop in stringProperties)
+            {
+                if (prop.Getter() == null)
+                {
+                    prop.Setter(string.Empty);
+                    migrated = true;
+                }
             }
 
-            if (loadedConfig.CfgBinPath == null)
-            {
-                loadedConfig.CfgBinPath = string.Empty;
-                migrated = true;
-            }
+                if (migrated)
+                {
+                    SaveMigratedConfig(loadedConfig);
+                }
 
-            if (loadedConfig.ViolaCliPath == null)
-            {
-                loadedConfig.ViolaCliPath = string.Empty;
-                migrated = true;
+                return loadedConfig;
             }
-
-            if (loadedConfig.SelectedCpkName == null)
+            finally
             {
-                loadedConfig.SelectedCpkName = string.Empty;
-                migrated = true;
+                jsonDoc?.Dispose();
             }
+        }
 
-            if (loadedConfig.LastKnownPacksSignature == null)
+        private bool MigrateStringProperty(JsonElement root, string propertyName, Func<string> getter, Action<string> setter, string defaultValue)
+        {
+            if (!root.TryGetProperty(propertyName, out _) || string.IsNullOrWhiteSpace(getter()))
             {
-                loadedConfig.LastKnownPacksSignature = string.Empty;
-                migrated = true;
+                setter(defaultValue);
+                return true;
             }
+            return false;
+        }
 
-            if (loadedConfig.LastKnownSteamBuildId == null)
+        private bool MigrateDateTimeProperty(JsonElement root, string propertyName, Func<DateTime> getter, Action<DateTime> setter, DateTime defaultValue)
+        {
+            if (!root.TryGetProperty(propertyName, out _) || getter() == DateTime.MinValue)
             {
-                loadedConfig.LastKnownSteamBuildId = string.Empty;
-                migrated = true;
+                setter(defaultValue);
+                return true;
             }
-
-            // Save migrated config if any changes were made
-            if (migrated)
-            {
-                SaveMigratedConfig(loadedConfig);
-            }
-
-            return loadedConfig;
+            return false;
         }
 
         private void SaveMigratedConfig(AppConfig config)
@@ -151,33 +186,129 @@ namespace IEVRModManager.Managers
 
                 var json = JsonSerializer.Serialize(config, options);
                 File.WriteAllText(_configPath, json);
-                System.Diagnostics.Debug.WriteLine("Configuration migrated and saved successfully.");
+                Instance.Debug("Configuration migrated and saved successfully.");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error saving migrated config: {ex.Message}");
+                Instance.Log(LogLevel.Warning, "Error saving migrated config", ex);
             }
         }
 
+        /// <summary>
+        /// Saves the configuration using an AppConfig object directly.
+        /// </summary>
+        /// <param name="config">The configuration object to save.</param>
+        /// <returns><c>true</c> if the configuration was saved successfully; otherwise, <c>false</c>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="config"/> is null.</exception>
+        /// <exception cref="ConfigurationException">Thrown when there's an error writing the configuration file.</exception>
+        public bool Save(AppConfig config)
+        {
+            if (config == null)
+            {
+                throw new ArgumentNullException(nameof(config));
+            }
+
+            try
+            {
+                FileSystemHelper.EnsureDirectoryExists(Path.GetDirectoryName(_configPath));
+                
+                var existingConfig = Load();
+                
+                config.LastAppUpdateCheckUtc = existingConfig.LastAppUpdateCheckUtc;
+                config.LastModPrefetchUtc = existingConfig.LastModPrefetchUtc;
+                config.LastCpkListCheckUtc = existingConfig.LastCpkListCheckUtc;
+
+                SaveConfigToFile(config);
+                return true;
+            }
+            catch (ConfigurationException)
+            {
+                throw;
+            }
+            catch (IOException ex)
+            {
+                Instance.Log(LogLevel.Error, "IO error saving config", ex);
+                throw new ConfigurationException("Failed to write configuration file. Check file permissions.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Instance.Log(LogLevel.Error, "Access denied saving config", ex);
+                throw new ConfigurationException("Access denied to configuration file.", ex);
+            }
+            catch (Exception ex)
+            {
+                Instance.Log(LogLevel.Error, "Unexpected error saving config", ex);
+                throw new ConfigurationException("An unexpected error occurred while saving configuration.", ex);
+            }
+        }
+
+        /// <summary>
+        /// Saves the configuration using individual parameters (legacy method for backward compatibility).
+        /// </summary>
+        /// <param name="gamePath">The path to the game directory.</param>
+        /// <param name="selectedCpkName">The name of the selected CPK file.</param>
+        /// <param name="cfgBinPath">The path to the CPK list configuration file.</param>
+        /// <param name="violaCliPath">The path to the Viola CLI executable.</param>
+        /// <param name="tmpDir">The temporary directory path.</param>
+        /// <param name="modEntries">The list of mod entries to save.</param>
+        /// <param name="lastKnownPacksSignature">The last known packs signature.</param>
+        /// <param name="lastKnownSteamBuildId">The last known Steam build ID.</param>
+        /// <param name="vanillaFallbackUntilUtc">The UTC date until which vanilla fallback is active.</param>
+        /// <param name="theme">The selected theme name.</param>
+        /// <param name="language">The selected language code.</param>
+        /// <param name="lastAppliedProfile">The name of the last applied profile.</param>
+        /// <returns><c>true</c> if the configuration was saved successfully; otherwise, <c>false</c>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="modEntries"/> is null.</exception>
+        /// <exception cref="ConfigurationException">Thrown when there's an error writing the configuration file.</exception>
         public bool Save(string gamePath, string selectedCpkName, string cfgBinPath, string violaCliPath, 
             string tmpDir, System.Collections.Generic.List<ModEntry> modEntries,
             string lastKnownPacksSignature, string lastKnownSteamBuildId,
             DateTime vanillaFallbackUntilUtc, string theme, string language, string lastAppliedProfile = "")
         {
+            if (modEntries == null)
+            {
+                throw new ArgumentNullException(nameof(modEntries));
+            }
+
             try
             {
-                EnsureDirectoryExists(Path.GetDirectoryName(_configPath));
+                FileSystemHelper.EnsureDirectoryExists(Path.GetDirectoryName(_configPath));
+                
+                var existingConfig = Load();
+                
                 var config = CreateAppConfig(gamePath, selectedCpkName, cfgBinPath, violaCliPath, 
                     tmpDir, modEntries, lastKnownPacksSignature, lastKnownSteamBuildId, 
                     vanillaFallbackUntilUtc, theme, language, lastAppliedProfile);
+                
+                config.LastAppUpdateCheckUtc = existingConfig.LastAppUpdateCheckUtc;
+                config.LastModPrefetchUtc = existingConfig.LastModPrefetchUtc;
+                config.LastCpkListCheckUtc = existingConfig.LastCpkListCheckUtc;
 
                 SaveConfigToFile(config);
                 return true;
             }
+            catch (ConfigurationException)
+            {
+                throw;
+            }
+            catch (ArgumentException)
+            {
+                throw;
+            }
+            catch (IOException ex)
+            {
+                Instance.Log(LogLevel.Error, "IO error saving config", ex);
+                throw new ConfigurationException("Failed to write configuration file. Check file permissions.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Instance.Log(LogLevel.Error, "Access denied saving config", ex);
+                throw new ConfigurationException("Access denied to configuration file.", ex);
+            }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error saving config: {ex.Message}");
-                return false;
+                Instance.Log(LogLevel.Error, "Unexpected error saving config", ex);
+                throw new ConfigurationException("An unexpected error occurred while saving configuration.", ex);
             }
         }
 
@@ -205,6 +336,11 @@ namespace IEVRModManager.Managers
 
         private void SaveConfigToFile(AppConfig config)
         {
+            if (config == null)
+            {
+                throw new ArgumentNullException(nameof(config));
+            }
+
             var options = new JsonSerializerOptions
             {
                 WriteIndented = true,
@@ -215,17 +351,59 @@ namespace IEVRModManager.Managers
             File.WriteAllText(_configPath, json);
         }
 
-        private static void EnsureDirectoryExists(string? path)
+        /// <summary>
+        /// Updates the last application update check timestamp in the configuration.
+        /// </summary>
+        /// <param name="checkTime">The UTC timestamp of when the update check was performed.</param>
+        public void UpdateLastAppUpdateCheckUtc(DateTime checkTime)
         {
-            if (string.IsNullOrWhiteSpace(path))
+            try
             {
-                return;
+                var config = Load();
+                var oldValue = config.LastAppUpdateCheckUtc;
+                config.LastAppUpdateCheckUtc = checkTime;
+                SaveConfigToFile(config);
+                
+                System.Threading.Thread.Sleep(50);
+                
+                if (File.Exists(_configPath))
+                {
+                    var json = File.ReadAllText(_configPath);
+                    using var jsonDoc = JsonDocument.Parse(json);
+                    if (jsonDoc.RootElement.TryGetProperty("LastAppUpdateCheckUtc", out var prop))
+                    {
+                        var savedValue = prop.GetDateTime();
+                        Instance.Debug($"Updated LastAppUpdateCheckUtc from {oldValue:yyyy-MM-dd HH:mm:ss} UTC to {checkTime:yyyy-MM-dd HH:mm:ss} UTC. File contains: {savedValue:yyyy-MM-dd HH:mm:ss} UTC");
+                    }
+                    else
+                    {
+                        Instance.Warning("LastAppUpdateCheckUtc property not found in saved config file!");
+                    }
+                }
             }
-
-            if (!Directory.Exists(path))
+            catch (Exception ex)
             {
-                Directory.CreateDirectory(path);
+                Instance.Log(LogLevel.Warning, "Error updating LastAppUpdateCheckUtc", ex);
             }
         }
+
+        /// <summary>
+        /// Updates the last mod prefetch timestamp in the configuration.
+        /// </summary>
+        /// <param name="prefetchTime">The UTC timestamp of when the mod prefetch was performed.</param>
+        public void UpdateLastModPrefetchUtc(DateTime prefetchTime)
+        {
+            try
+            {
+                var config = Load();
+                config.LastModPrefetchUtc = prefetchTime;
+                SaveConfigToFile(config);
+            }
+            catch (Exception ex)
+            {
+                Instance.Log(LogLevel.Warning, "Error updating LastModPrefetchUtc", ex);
+            }
+        }
+
     }
 }

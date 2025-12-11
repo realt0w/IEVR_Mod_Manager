@@ -4,63 +4,107 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using IEVRModManager.Models;
+using IEVRModManager.Helpers;
+using IEVRModManager.Exceptions;
+using static IEVRModManager.Helpers.Logger;
 
 namespace IEVRModManager.Managers
 {
+    /// <summary>
+    /// Manages mod profiles, allowing users to save and load different mod configurations.
+    /// </summary>
     public class ProfileManager
     {
         private readonly string _profilesDir;
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ProfileManager"/> class.
+        /// </summary>
         public ProfileManager()
         {
             _profilesDir = Path.Combine(Config.AppDataDir, "Profiles");
-            EnsureDirectoryExists(_profilesDir);
+            FileSystemHelper.EnsureDirectoryExists(_profilesDir);
         }
 
+        /// <summary>
+        /// Gets all available mod profiles, ordered by last modified date (newest first).
+        /// </summary>
+        /// <returns>A list of all <see cref="ModProfile"/> objects found in the profiles directory.</returns>
         public List<ModProfile> GetAllProfiles()
         {
-            var profiles = new List<ModProfile>();
-            
             if (!Directory.Exists(_profilesDir))
             {
-                return profiles;
+                return new List<ModProfile>();
             }
 
-            var profileFiles = Directory.GetFiles(_profilesDir, "*.json");
-            
-            foreach (var file in profileFiles)
-            {
-                var profile = LoadProfileFromFile(file);
-                if (profile != null)
-                {
-                    profiles.Add(profile);
-                }
-            }
-
-            return profiles.OrderByDescending(p => p.LastModifiedDate).ToList();
+            return Directory.GetFiles(_profilesDir, "*.json")
+                .Select(LoadProfileFromFile)
+                .Where(profile => profile != null)
+                .OrderByDescending(p => p!.LastModifiedDate)
+                .ToList()!;
         }
 
         private ModProfile? LoadProfileFromFile(string filePath)
         {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return null;
+            }
+
             try
             {
+                if (!File.Exists(filePath))
+                {
+                    return null;
+                }
+
                 var json = File.ReadAllText(filePath);
-                var profile = JsonSerializer.Deserialize<ModProfile>(json, new JsonSerializerOptions
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    return null;
+                }
+
+                var options = new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
-                });
-                
-                return profile;
+                };
+                return JsonSerializer.Deserialize<ModProfile>(json, options);
+            }
+            catch (JsonException ex)
+            {
+                Instance.Log(LogLevel.Warning, $"Error parsing profile JSON {filePath}", ex);
+                return null;
+            }
+            catch (IOException ex)
+            {
+                Instance.Log(LogLevel.Warning, $"IO error loading profile {filePath}", ex);
+                return null;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error loading profile {filePath}: {ex.Message}");
+                Instance.Log(LogLevel.Warning, $"Unexpected error loading profile {filePath}", ex);
                 return null;
             }
         }
 
+        /// <summary>
+        /// Loads a mod profile by name.
+        /// </summary>
+        /// <param name="profileName">The name of the profile to load.</param>
+        /// <returns>The loaded <see cref="ModProfile"/> if found; otherwise, <c>null</c>.</returns>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="profileName"/> is null or empty.</exception>
         public ModProfile? LoadProfile(string profileName)
         {
+            if (string.IsNullOrWhiteSpace(profileName))
+            {
+                throw new ArgumentException("Profile name cannot be null or empty.", nameof(profileName));
+            }
+
             var filePath = GetProfilePath(profileName);
             
             if (!File.Exists(filePath))
@@ -71,11 +115,23 @@ namespace IEVRModManager.Managers
             return LoadProfileFromFile(filePath);
         }
 
+        /// <summary>
+        /// Saves a mod profile to disk.
+        /// </summary>
+        /// <param name="profile">The profile to save.</param>
+        /// <returns><c>true</c> if the profile was saved successfully; otherwise, <c>false</c>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="profile"/> is null.</exception>
+        /// <exception cref="ModManagerException">Thrown when there's an error saving the profile file.</exception>
         public bool SaveProfile(ModProfile profile)
         {
+            if (profile == null)
+            {
+                throw new ArgumentNullException(nameof(profile));
+            }
+
             try
             {
-                EnsureDirectoryExists(_profilesDir);
+                FileSystemHelper.EnsureDirectoryExists(_profilesDir);
                 
                 var safeName = GetSafeProfileFileName(profile.Name);
                 var filePath = Path.Combine(_profilesDir, $"{safeName}.json");
@@ -84,10 +140,20 @@ namespace IEVRModManager.Managers
                 SaveProfileToFile(profile, filePath);
                 return true;
             }
+            catch (IOException ex)
+            {
+                Instance.Log(LogLevel.Error, "IO error saving profile", ex);
+                throw new ModManagerException("Failed to save profile. Check file permissions.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Instance.Log(LogLevel.Error, "Access denied saving profile", ex);
+                throw new ModManagerException("Access denied to profile directory.", ex);
+            }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error saving profile: {ex.Message}");
-                return false;
+                Instance.Log(LogLevel.Error, "Unexpected error saving profile", ex);
+                throw new ModManagerException("An unexpected error occurred while saving profile.", ex);
             }
         }
 
@@ -108,18 +174,34 @@ namespace IEVRModManager.Managers
 
         private void SaveProfileToFile(ModProfile profile, string filePath)
         {
-            var options = new JsonSerializerOptions
+            if (profile == null)
             {
-                WriteIndented = true,
-                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-            };
+                throw new ArgumentNullException(nameof(profile));
+            }
 
-            var json = JsonSerializer.Serialize(profile, options);
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                throw new ArgumentException("File path cannot be null or empty.", nameof(filePath));
+            }
+
+            var json = JsonSerializer.Serialize(profile, JsonOptions);
             File.WriteAllText(filePath, json);
         }
 
+        /// <summary>
+        /// Deletes a mod profile from disk.
+        /// </summary>
+        /// <param name="profileName">The name of the profile to delete.</param>
+        /// <returns><c>true</c> if the profile was deleted successfully; otherwise, <c>false</c> if the profile doesn't exist.</returns>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="profileName"/> is null or empty.</exception>
+        /// <exception cref="ModManagerException">Thrown when there's an error deleting the profile file.</exception>
         public bool DeleteProfile(string profileName)
         {
+            if (string.IsNullOrWhiteSpace(profileName))
+            {
+                throw new ArgumentException("Profile name cannot be null or empty.", nameof(profileName));
+            }
+
             try
             {
                 var filePath = GetProfilePath(profileName);
@@ -132,15 +214,35 @@ namespace IEVRModManager.Managers
                 
                 return false;
             }
+            catch (IOException ex)
+            {
+                Instance.Log(LogLevel.Error, $"IO error deleting profile {profileName}", ex);
+                throw new ModManagerException($"Failed to delete profile '{profileName}'. The file may be in use.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Instance.Log(LogLevel.Error, $"Access denied deleting profile {profileName}", ex);
+                throw new ModManagerException($"Access denied to delete profile '{profileName}'.", ex);
+            }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error deleting profile {profileName}: {ex.Message}");
-                return false;
+                Instance.Log(LogLevel.Error, $"Unexpected error deleting profile {profileName}", ex);
+                throw new ModManagerException($"An unexpected error occurred while deleting profile '{profileName}'.", ex);
             }
         }
 
+        /// <summary>
+        /// Checks if a profile with the specified name exists.
+        /// </summary>
+        /// <param name="profileName">The name of the profile to check.</param>
+        /// <returns><c>true</c> if the profile exists; otherwise, <c>false</c>.</returns>
         public bool ProfileExists(string profileName)
         {
+            if (string.IsNullOrWhiteSpace(profileName))
+            {
+                return false;
+            }
+
             var filePath = GetProfilePath(profileName);
             return File.Exists(filePath);
         }
@@ -161,7 +263,6 @@ namespace IEVRModManager.Managers
             var invalidChars = Path.GetInvalidFileNameChars();
             var sanitized = new string(fileName.Select(c => invalidChars.Contains(c) ? '_' : c).ToArray());
             
-            // Limit length
             if (sanitized.Length > 100)
             {
                 sanitized = sanitized.Substring(0, 100);
@@ -170,18 +271,6 @@ namespace IEVRModManager.Managers
             return sanitized.Trim();
         }
 
-        private static void EnsureDirectoryExists(string? path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                return;
-            }
-
-            if (!Directory.Exists(path))
-            {
-                Directory.CreateDirectory(path);
-            }
-        }
     }
 }
 

@@ -9,6 +9,9 @@ using System.Threading.Tasks;
 
 namespace IEVRModManager.Windows
 {
+    /// <summary>
+    /// Interaction logic for ConfigPathsWindow.xaml. Allows users to configure application paths and settings.
+    /// </summary>
     public partial class ConfigPathsWindow : Window
     {
         private AppConfig _config;
@@ -16,6 +19,14 @@ namespace IEVRModManager.Windows
         private readonly Func<Task> _createBackupAction;
         private readonly Func<Task> _restoreBackupAction;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ConfigPathsWindow"/> class.
+        /// </summary>
+        /// <param name="parent">The parent window.</param>
+        /// <param name="config">The application configuration to edit.</param>
+        /// <param name="saveCallback">Callback to execute when configuration is saved.</param>
+        /// <param name="createBackupAction">Action to create a backup.</param>
+        /// <param name="restoreBackupAction">Action to restore from a backup.</param>
         public ConfigPathsWindow(Window parent, AppConfig config, System.Action saveCallback, Func<Task> createBackupAction, Func<Task> restoreBackupAction)
         {
             InitializeComponent();
@@ -264,15 +275,7 @@ namespace IEVRModManager.Windows
                 return;
             }
 
-            // Show confirmation dialog
-            var confirmWindow = new BackupConfirmationWindow(this,
-                Helpers.LocalizationHelper.GetString("CreateBackupConfirmMessage"), false);
-            var result = confirmWindow.ShowDialog();
-            if (result != true || !confirmWindow.UserConfirmed)
-            {
-                return;
-            }
-
+            // The action already shows confirmation dialog, so just invoke it
             try
             {
                 await _createBackupAction.Invoke();
@@ -294,15 +297,7 @@ namespace IEVRModManager.Windows
                 return;
             }
 
-            // Show confirmation dialog
-            var confirmWindow = new BackupConfirmationWindow(this,
-                Helpers.LocalizationHelper.GetString("RestoreBackupConfirmMessage"), true);
-            var result = confirmWindow.ShowDialog();
-            if (result != true || !confirmWindow.UserConfirmed)
-            {
-                return;
-            }
-
+            // The action already shows confirmation dialog, so just invoke it
             try
             {
                 await _restoreBackupAction.Invoke();

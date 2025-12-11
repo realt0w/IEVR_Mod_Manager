@@ -39,6 +39,10 @@ namespace IEVRModManager.Windows
             SharedHttpClient.Timeout = TimeSpan.FromSeconds(20);
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="GameBananaBrowserWindow"/> class.
+        /// </summary>
+        /// <param name="owner">The main window owner.</param>
         public GameBananaBrowserWindow(MainWindow owner)
         {
             InitializeComponent();
@@ -74,6 +78,10 @@ namespace IEVRModManager.Windows
             }
         }
 
+        /// <summary>
+        /// Prefetches mods from GameBanana in the background.
+        /// </summary>
+        /// <param name="owner">The main window instance for logging.</param>
         public static async Task PrefetchModsAsync(MainWindow? owner)
         {
             try
@@ -639,16 +647,50 @@ namespace IEVRModManager.Windows
         }
     }
 
+    /// <summary>
+    /// Represents a mod from GameBanana.
+    /// </summary>
     public class GameBananaMod
     {
+        /// <summary>
+        /// Gets or sets the mod ID.
+        /// </summary>
         public int Id { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the mod name.
+        /// </summary>
         public string Name { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the URL to the mod's page.
+        /// </summary>
         public string PageUrl { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the download URL for the mod.
+        /// </summary>
         public string DownloadUrl { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the number of downloads.
+        /// </summary>
         public int Downloads { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the thumbnail image URL.
+        /// </summary>
         public string ThumbnailUrl { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets whether this is a placeholder mod (shown while loading).
+        /// </summary>
         public bool IsPlaceholder { get; set; }
 
+        /// <summary>
+        /// Creates a placeholder mod instance for loading states.
+        /// </summary>
+        /// <returns>A placeholder <see cref="GameBananaMod"/> instance.</returns>
         public static GameBananaMod CreatePlaceholder()
         {
             return new GameBananaMod

@@ -6,8 +6,17 @@ using IEVRModManager.Helpers;
 
 namespace IEVRModManager.Windows
 {
+    /// <summary>
+    /// Interaction logic for SuccessMessageWindow.xaml. Displays a success message, optionally with a list of applied mods.
+    /// </summary>
     public partial class SuccessMessageWindow : Window
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SuccessMessageWindow"/> class.
+        /// </summary>
+        /// <param name="parent">The parent window.</param>
+        /// <param name="message">The success message to display.</param>
+        /// <param name="modNames">Optional list of mod names that were applied.</param>
         public SuccessMessageWindow(Window parent, string message, List<string>? modNames = null)
         {
             InitializeComponent();

@@ -6,10 +6,21 @@ using IEVRModManager.Helpers;
 
 namespace IEVRModManager.Windows
 {
+    /// <summary>
+    /// Interaction logic for PacksWarningWindow.xaml. Warns users about mods that modify the packs folder.
+    /// </summary>
     public partial class PacksWarningWindow : Window
     {
+        /// <summary>
+        /// Gets whether the user chose to continue despite the warning.
+        /// </summary>
         public bool UserChoseContinue { get; private set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PacksWarningWindow"/> class.
+        /// </summary>
+        /// <param name="parent">The parent window.</param>
+        /// <param name="modNames">List of mod names that modify the packs folder.</param>
         public PacksWarningWindow(Window parent, List<string> modNames)
         {
             InitializeComponent();

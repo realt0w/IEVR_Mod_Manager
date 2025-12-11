@@ -4,18 +4,32 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using IEVRModManager.Models;
+using IEVRModManager.Exceptions;
 
 namespace IEVRModManager.Managers
 {
+    /// <summary>
+    /// Manages scanning and detection of mods in the mods directory.
+    /// </summary>
     public class ModManager
     {
         private readonly string _modsDir;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ModManager"/> class.
+        /// </summary>
+        /// <param name="modsDir">The directory path where mods are stored. If null, uses the default mods directory.</param>
         public ModManager(string? modsDir = null)
         {
             _modsDir = modsDir ?? Config.DefaultModsDir;
         }
 
+        /// <summary>
+        /// Scans the mods directory and returns a list of mod entries.
+        /// </summary>
+        /// <param name="savedMods">Optional list of saved mod data to restore enabled state.</param>
+        /// <param name="existingEntries">Optional list of existing mod entries to preserve order and state.</param>
+        /// <returns>A list of <see cref="ModEntry"/> objects representing all mods found in the directory.</returns>
         public List<ModEntry> ScanMods(List<ModData>? savedMods = null, 
             List<ModEntry>? existingEntries = null)
         {
@@ -121,7 +135,6 @@ namespace IEVRModManager.Managers
 
         private ModMetadata LoadModMetadata(string modPath)
         {
-            var modDataPath = Path.Combine(modPath, "mod_data.json");
             var metadata = new ModMetadata
             {
                 DisplayName = Path.GetFileName(modPath),
@@ -131,6 +144,7 @@ namespace IEVRModManager.Managers
                 ModLink = string.Empty
             };
 
+            var modDataPath = Path.Combine(modPath, "mod_data.json");
             if (!File.Exists(modDataPath))
             {
                 return metadata;
@@ -143,20 +157,11 @@ namespace IEVRModManager.Managers
 
                 if (data != null)
                 {
-                    if (data.TryGetValue("Name", out var nameElement))
-                        metadata.DisplayName = nameElement.GetString() ?? metadata.DisplayName;
-
-                    if (data.TryGetValue("Author", out var authorElement))
-                        metadata.Author = authorElement.GetString() ?? string.Empty;
-
-                    if (data.TryGetValue("ModVersion", out var versionElement))
-                        metadata.ModVersion = versionElement.GetString() ?? string.Empty;
-
-                    if (data.TryGetValue("GameVersion", out var gameVersionElement))
-                        metadata.GameVersion = gameVersionElement.GetString() ?? string.Empty;
-
-                    if (data.TryGetValue("ModLink", out var modLinkElement))
-                        metadata.ModLink = modLinkElement.GetString() ?? string.Empty;
+                    metadata.DisplayName = GetStringValue(data, "Name") ?? metadata.DisplayName;
+                    metadata.Author = GetStringValue(data, "Author") ?? string.Empty;
+                    metadata.ModVersion = GetStringValue(data, "ModVersion") ?? string.Empty;
+                    metadata.GameVersion = GetStringValue(data, "GameVersion") ?? string.Empty;
+                    metadata.ModLink = GetStringValue(data, "ModLink") ?? string.Empty;
                 }
             }
             catch
@@ -167,23 +172,50 @@ namespace IEVRModManager.Managers
             return metadata;
         }
 
+        private static string? GetStringValue(Dictionary<string, JsonElement> data, string key)
+        {
+            return data.TryGetValue(key, out var element) ? element.GetString() : null;
+        }
+
+        /// <summary>
+        /// Gets the full paths of all enabled mods from the provided mod entries.
+        /// </summary>
+        /// <param name="modEntries">The list of mod entries to filter.</param>
+        /// <returns>A list of full directory paths for enabled mods.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="modEntries"/> is null.</exception>
         public List<string> GetEnabledMods(List<ModEntry> modEntries)
         {
+            if (modEntries == null)
+            {
+                throw new ArgumentNullException(nameof(modEntries));
+            }
+
             return modEntries
-                .Where(me => me.Enabled)
-                .Select(me => me.FullPath)
+                .Where(me => me != null && me.Enabled)
+                .Select(me => me!.FullPath)
                 .ToList();
         }
 
+        /// <summary>
+        /// Detects mods that modify the packs folder.
+        /// </summary>
+        /// <param name="modEntries">The list of mod entries to check.</param>
+        /// <returns>A list of display names of mods that touch the packs folder.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="modEntries"/> is null.</exception>
         public List<string> DetectPacksModifiers(List<ModEntry> modEntries)
         {
+            if (modEntries == null)
+            {
+                throw new ArgumentNullException(nameof(modEntries));
+            }
+
             var modsTouchingPacks = new List<string>();
             
-            foreach (var mod in modEntries.Where(me => me.Enabled))
+            foreach (var mod in modEntries.Where(me => me != null && me.Enabled))
             {
-                if (ModTouchesPacksFolder(mod))
+                if (ModTouchesPacksFolder(mod!))
                 {
-                    var displayName = string.IsNullOrWhiteSpace(mod.DisplayName) ? mod.Name : mod.DisplayName;
+                    var displayName = string.IsNullOrWhiteSpace(mod!.DisplayName) ? mod.Name : mod.DisplayName;
                     modsTouchingPacks.Add(displayName);
                 }
             }
@@ -195,61 +227,115 @@ namespace IEVRModManager.Managers
 
         private bool ModTouchesPacksFolder(ModEntry mod)
         {
-            var dataPath = Path.Combine(mod.FullPath, "data");
-            if (!Directory.Exists(dataPath))
+            if (mod == null)
+            {
+                throw new ArgumentNullException(nameof(mod));
+            }
+
+            if (string.IsNullOrWhiteSpace(mod.FullPath))
             {
                 return false;
             }
 
-            var files = Directory.GetFiles(dataPath, "*", SearchOption.AllDirectories);
-            return files.Any(filePath =>
+            try
             {
-                var relativePath = Path.GetRelativePath(dataPath, filePath)
-                    .Replace('\\', '/');
-                return relativePath.StartsWith("packs/", StringComparison.OrdinalIgnoreCase);
-            });
+                var dataPath = Path.Combine(mod.FullPath, "data");
+                if (!Directory.Exists(dataPath))
+                {
+                    return false;
+                }
+
+                var files = Directory.GetFiles(dataPath, "*", SearchOption.AllDirectories);
+                return files.Any(filePath =>
+                {
+                    var relativePath = Path.GetRelativePath(dataPath, filePath)
+                        .Replace('\\', '/');
+                    return relativePath.StartsWith("packs/", StringComparison.OrdinalIgnoreCase);
+                });
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
         }
 
+        /// <summary>
+        /// Detects file conflicts between enabled mods.
+        /// </summary>
+        /// <param name="modEntries">The list of mod entries to check for conflicts.</param>
+        /// <returns>A dictionary mapping file paths to lists of mod names that conflict on that file.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="modEntries"/> is null.</exception>
         public Dictionary<string, List<string>> DetectFileConflicts(List<ModEntry> modEntries)
         {
+            if (modEntries == null)
+            {
+                throw new ArgumentNullException(nameof(modEntries));
+            }
+
             var conflicts = new Dictionary<string, List<string>>();
-            var enabledMods = modEntries.Where(me => me.Enabled).ToList();
+            var enabledMods = modEntries.Where(me => me != null && me.Enabled).ToList();
 
             if (enabledMods.Count < 2)
             {
-                // No conflicts if less than 2 mods are enabled
                 return conflicts;
             }
 
-            var fileToModsMap = BuildFileToModsMap(enabledMods);
+            var fileToModsMap = BuildFileToModsMap(enabledMods!);
             return ExtractConflicts(fileToModsMap);
         }
 
         private Dictionary<string, HashSet<string>> BuildFileToModsMap(List<ModEntry> enabledMods)
         {
+            if (enabledMods == null)
+            {
+                throw new ArgumentNullException(nameof(enabledMods));
+            }
+
             var fileToModsMap = new Dictionary<string, HashSet<string>>();
 
             foreach (var mod in enabledMods)
             {
-                var modDataPath = Path.Combine(mod.FullPath, "data");
-                if (!Directory.Exists(modDataPath))
+                if (mod == null || string.IsNullOrWhiteSpace(mod.FullPath))
                 {
                     continue;
                 }
 
-                var files = Directory.GetFiles(modDataPath, "*", SearchOption.AllDirectories);
-                
-                foreach (var filePath in files)
+                try
                 {
-                    var relativePath = Path.GetRelativePath(modDataPath, filePath)
-                        .Replace('\\', '/');
-
-                    if (!fileToModsMap.ContainsKey(relativePath))
+                    var modDataPath = Path.Combine(mod.FullPath, "data");
+                    if (!Directory.Exists(modDataPath))
                     {
-                        fileToModsMap[relativePath] = new HashSet<string>();
+                        continue;
                     }
 
-                    fileToModsMap[relativePath].Add(mod.DisplayName);
+                    var files = Directory.GetFiles(modDataPath, "*", SearchOption.AllDirectories);
+                    var displayName = string.IsNullOrWhiteSpace(mod.DisplayName) ? mod.Name : mod.DisplayName;
+                    
+                    foreach (var filePath in files)
+                    {
+                        var relativePath = Path.GetRelativePath(modDataPath, filePath)
+                            .Replace('\\', '/');
+
+                        if (!fileToModsMap.TryGetValue(relativePath, out var modSet))
+                        {
+                            modSet = new HashSet<string>();
+                            fileToModsMap[relativePath] = modSet;
+                        }
+
+                        modSet.Add(displayName);
+                    }
+                }
+                catch (IOException)
+                {
+                    continue;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    continue;
                 }
             }
 
@@ -263,7 +349,6 @@ namespace IEVRModManager.Managers
 
             foreach (var kvp in fileToModsMap)
             {
-                // Skip cpk_list.cfg.bin as it's expected to be in multiple mods
                 if (kvp.Key.Equals(cpkListFileName, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;

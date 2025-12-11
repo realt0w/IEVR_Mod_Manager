@@ -48,6 +48,12 @@ bld/
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
 
+# xUnit test results
+*.trx
+TestResults/
+[Tt]est[Rr]esults/
+[Tt]est[Rr]esult*.xml
+
 # NuGet Packages
 *.nupkg
 *.snupkg
@@ -140,10 +146,14 @@ _TeamCity*
 .axoCover/*
 !.axoCover/settings.json
 
-# Coverlet
+# Coverlet / Code Coverage
 coverage*.json
 coverage*.xml
 coverage*.info
+coverage/
+*.coverage
+*.coveragexml
+lcov.info
 
 # Mono Auto Generated
 mono_crash.*
@@ -184,6 +194,11 @@ assets/
 *.bak
 *.swp
 *.orig
+
+# Test temporary files and directories
+*.testlog
+test-results/
+test-output/
 
 # Publish profiles
 *.pubxml

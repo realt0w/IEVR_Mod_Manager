@@ -6,10 +6,21 @@ using IEVRModManager.Helpers;
 
 namespace IEVRModManager.Windows
 {
+    /// <summary>
+    /// Interaction logic for ConflictWarningWindow.xaml. Warns users about file conflicts between mods.
+    /// </summary>
     public partial class ConflictWarningWindow : Window
     {
+        /// <summary>
+        /// Gets whether the user chose to continue despite conflicts.
+        /// </summary>
         public bool UserChoseContinue { get; private set; } = false;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ConflictWarningWindow"/> class.
+        /// </summary>
+        /// <param name="parent">The parent window.</param>
+        /// <param name="conflicts">Dictionary mapping file paths to lists of mod names that conflict on that file.</param>
         public ConflictWarningWindow(Window parent, Dictionary<string, List<string>> conflicts)
         {
             InitializeComponent();

@@ -6,9 +6,13 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using YamlDotNet.Serialization;
+using static IEVRModManager.Helpers.Logger;
 
 namespace IEVRModManager.Helpers
 {
+    /// <summary>
+    /// Provides localization support for the application, loading strings from YAML files.
+    /// </summary>
     public static class LocalizationHelper
     {
         private static Dictionary<string, string>? _currentStrings;
@@ -29,84 +33,88 @@ namespace IEVRModManager.Helpers
                 
                 try
                 {
-                    // First, try to load from file system (for development and non-single-file apps)
-                    var baseDir = AppContext.BaseDirectory;
-                    var resourcesDir = Path.Combine(baseDir, "Resources");
-                    
-                    System.Diagnostics.Debug.WriteLine($"[Localization] Trying to load from: {resourcesDir}");
-                    
-                    // If Resources folder doesn't exist in base directory, try AppDomain base directory as fallback
-                    if (!Directory.Exists(resourcesDir))
-                    {
-                        var fallbackDir = AppDomain.CurrentDomain.BaseDirectory;
-                        var fallbackResourcesDir = Path.Combine(fallbackDir, "Resources");
-                        System.Diagnostics.Debug.WriteLine($"[Localization] Fallback directory: {fallbackResourcesDir}");
-                        if (Directory.Exists(fallbackResourcesDir))
-                        {
-                            resourcesDir = fallbackResourcesDir;
-                        }
-                    }
+                    var resourcesDir = GetResourcesDirectory();
+                    bool loadedFromFiles = TryLoadFromFileSystem(resourcesDir);
 
-                    System.Diagnostics.Debug.WriteLine($"[Localization] Using resources directory: {resourcesDir}");
-                    System.Diagnostics.Debug.WriteLine($"[Localization] Directory exists: {Directory.Exists(resourcesDir)}");
-
-                    bool loadedFromFiles = false;
-
-                    // Try to load from file system first
-                    var defaultPath = Path.Combine(resourcesDir, "Strings.yaml");
-                    var spanishPath = Path.Combine(resourcesDir, "Strings.es-ES.yaml");
-                    
-                    if (File.Exists(defaultPath))
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Localization] Loading English from file: {defaultPath}");
-                        _allStrings["en-US"] = LoadYamlFile(defaultPath);
-                        System.Diagnostics.Debug.WriteLine($"[Localization] Loaded {_allStrings["en-US"].Count} English strings from file");
-                        loadedFromFiles = true;
-                    }
-
-                    if (File.Exists(spanishPath))
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Localization] Loading Spanish from file: {spanishPath}");
-                        _allStrings["es-ES"] = LoadYamlFile(spanishPath);
-                        System.Diagnostics.Debug.WriteLine($"[Localization] Loaded {_allStrings["es-ES"].Count} Spanish strings from file");
-                        loadedFromFiles = true;
-                    }
-
-                    // If files not found, try loading from embedded resources (for single-file apps)
                     if (!loadedFromFiles)
                     {
-                        System.Diagnostics.Debug.WriteLine("[Localization] Files not found in file system, trying embedded resources...");
-                        
-                        // Load English from embedded resource
-                        var englishResource = LoadYamlFromEmbeddedResource("IEVRModManager.Resources.Strings.yaml");
-                        if (englishResource != null && englishResource.Count > 0)
-                        {
-                            _allStrings["en-US"] = englishResource;
-                            System.Diagnostics.Debug.WriteLine($"[Localization] Loaded {englishResource.Count} English strings from embedded resource");
-                        }
-
-                        // Load Spanish from embedded resource
-                        var spanishResource = LoadYamlFromEmbeddedResource("IEVRModManager.Resources.Strings.es-ES.yaml");
-                        if (spanishResource != null && spanishResource.Count > 0)
-                        {
-                            _allStrings["es-ES"] = spanishResource;
-                            System.Diagnostics.Debug.WriteLine($"[Localization] Loaded {spanishResource.Count} Spanish strings from embedded resource");
-                        }
+                        TryLoadFromEmbeddedResources();
                     }
 
-                    // If still no strings loaded, create default empty dictionary
                     if (_allStrings.Count == 0)
                     {
-                        System.Diagnostics.Debug.WriteLine("[Localization] WARNING: No localization files found in file system or embedded resources!");
                         _allStrings["en-US"] = new Dictionary<string, string>();
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[Localization] Error loading localization files: {ex.Message}");
-                    System.Diagnostics.Debug.WriteLine($"[Localization] Stack trace: {ex.StackTrace}");
+                    Instance.Log(LogLevel.Warning, "Error loading localization files", ex);
                     _allStrings["en-US"] = new Dictionary<string, string>();
                 }
+            }
+        }
+
+        private static string GetResourcesDirectory()
+        {
+            var baseDir = AppContext.BaseDirectory;
+            var resourcesDir = Path.Combine(baseDir, "Resources");
+            
+            if (!Directory.Exists(resourcesDir))
+            {
+                var fallbackDir = AppDomain.CurrentDomain.BaseDirectory;
+                var fallbackResourcesDir = Path.Combine(fallbackDir, "Resources");
+                if (Directory.Exists(fallbackResourcesDir))
+                {
+                    resourcesDir = fallbackResourcesDir;
+                }
+            }
+
+            return resourcesDir;
+        }
+
+        private static bool TryLoadFromFileSystem(string resourcesDir)
+        {
+            if (_allStrings == null)
+            {
+                return false;
+            }
+
+            var defaultPath = Path.Combine(resourcesDir, "Strings.yaml");
+            var spanishPath = Path.Combine(resourcesDir, "Strings.es-ES.yaml");
+            bool loadedAny = false;
+
+            if (File.Exists(defaultPath))
+            {
+                _allStrings["en-US"] = LoadYamlFile(defaultPath);
+                loadedAny = true;
+            }
+
+            if (File.Exists(spanishPath))
+            {
+                _allStrings["es-ES"] = LoadYamlFile(spanishPath);
+                loadedAny = true;
+            }
+
+            return loadedAny;
+        }
+
+        private static void TryLoadFromEmbeddedResources()
+        {
+            if (_allStrings == null)
+            {
+                return;
+            }
+
+            var englishResource = LoadYamlFromEmbeddedResource("IEVRModManager.Resources.Strings.yaml");
+            if (englishResource != null && englishResource.Count > 0)
+            {
+                _allStrings["en-US"] = englishResource;
+            }
+
+            var spanishResource = LoadYamlFromEmbeddedResource("IEVRModManager.Resources.Strings.es-ES.yaml");
+            if (spanishResource != null && spanishResource.Count > 0)
+            {
+                _allStrings["es-ES"] = spanishResource;
             }
         }
 
@@ -116,18 +124,14 @@ namespace IEVRModManager.Helpers
             {
                 var assembly = Assembly.GetExecutingAssembly();
                 
-                // First, try the exact resource name
                 using (var stream = assembly.GetManifestResourceStream(resourceName))
                 {
                     if (stream != null)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[Localization] Found embedded resource: {resourceName}");
                         return LoadYamlFromStream(stream);
                     }
                 }
 
-                // If not found, try alternative resource names
-                System.Diagnostics.Debug.WriteLine($"[Localization] Embedded resource '{resourceName}' not found, trying alternatives...");
                 var alternativeNames = new[]
                 {
                     resourceName.Replace("IEVRModManager.", ""),
@@ -138,27 +142,20 @@ namespace IEVRModManager.Helpers
                 
                 foreach (var altName in alternativeNames)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[Localization] Trying alternative resource name: {altName}");
                     using (var altStream = assembly.GetManifestResourceStream(altName))
                     {
                         if (altStream != null)
                         {
-                            System.Diagnostics.Debug.WriteLine($"[Localization] Found resource with alternative name: {altName}");
                             return LoadYamlFromStream(altStream);
                         }
                     }
                 }
                 
-                // If still not found, search all resources for matching file names
-                var allResources = assembly.GetManifestResourceNames();
-                System.Diagnostics.Debug.WriteLine($"[Localization] Searching through {allResources.Length} embedded resources...");
-                
                 var fileName = Path.GetFileName(resourceName);
-                foreach (var resName in allResources)
+                foreach (var resName in assembly.GetManifestResourceNames())
                 {
                     if (resName.EndsWith(fileName, StringComparison.OrdinalIgnoreCase))
                     {
-                        System.Diagnostics.Debug.WriteLine($"[Localization] Found matching resource by filename: {resName}");
                         using (var foundStream = assembly.GetManifestResourceStream(resName))
                         {
                             if (foundStream != null)
@@ -169,13 +166,11 @@ namespace IEVRModManager.Helpers
                     }
                 }
                 
-                // List all available resources for debugging
-                System.Diagnostics.Debug.WriteLine($"[Localization] Available embedded resources: {string.Join(", ", allResources)}");
                 return null;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[Localization] Error loading embedded resource '{resourceName}': {ex.Message}");
+                Instance.Log(LogLevel.Warning, $"Error loading embedded resource '{resourceName}'", ex);
                 return null;
             }
         }
@@ -214,128 +209,140 @@ namespace IEVRModManager.Helpers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error loading YAML file {filePath}: {ex.Message}");
+                Instance.Log(LogLevel.Warning, $"Error loading YAML file {filePath}", ex);
                 return new Dictionary<string, string>();
             }
         }
 
+        /// <summary>
+        /// Sets the application language and loads the corresponding localization strings.
+        /// </summary>
+        /// <param name="languageCode">The language code (e.g., "en-US", "es-ES") or "System" to use system default.</param>
         public static void SetLanguage(string languageCode)
         {
             try
             {
-                CultureInfo culture;
-                string langKey;
-                
-                System.Diagnostics.Debug.WriteLine($"[Localization] SetLanguage called with: {languageCode}");
-                
-                if (string.IsNullOrWhiteSpace(languageCode) || languageCode == "System")
-                {
-                    culture = CultureInfo.CurrentUICulture;
-                    langKey = culture.Name;
-                    System.Diagnostics.Debug.WriteLine($"[Localization] Using system language: {langKey}");
-                }
-                else
-                {
-                    culture = new CultureInfo(languageCode);
-                    langKey = languageCode;
-                    System.Diagnostics.Debug.WriteLine($"[Localization] Using specified language: {langKey}");
-                }
+                var (culture, langKey) = DetermineCulture(languageCode);
+                SetCulture(culture);
 
-                _currentCulture = culture;
-                Thread.CurrentThread.CurrentCulture = culture;
-                Thread.CurrentThread.CurrentUICulture = culture;
-                CultureInfo.DefaultThreadCurrentCulture = culture;
-                CultureInfo.DefaultThreadCurrentUICulture = culture;
-
-                // Load strings for the selected language
                 lock (_lockObject)
                 {
-                    if (_allStrings == null)
-                    {
-                        LoadStrings();
-                    }
-
-                    System.Diagnostics.Debug.WriteLine($"[Localization] Available languages: {(_allStrings != null ? string.Join(", ", _allStrings.Keys) : "null")}");
-                    System.Diagnostics.Debug.WriteLine($"[Localization] Looking for language key: {langKey}");
-
-                    // Try to get strings for the language, fallback to en-US if not found
-                    if (_allStrings != null && _allStrings.TryGetValue(langKey, out var strings))
-                    {
-                        _currentStrings = strings;
-                        System.Diagnostics.Debug.WriteLine($"[Localization] Loaded {strings.Count} strings for {langKey}");
-                    }
-                    else if (_allStrings != null && _allStrings.TryGetValue("en-US", out var defaultStrings))
-                    {
-                        _currentStrings = defaultStrings;
-                        System.Diagnostics.Debug.WriteLine($"[Localization] Fallback to English, loaded {defaultStrings.Count} strings");
-                    }
-                    else
-                    {
-                        _currentStrings = new Dictionary<string, string>();
-                        System.Diagnostics.Debug.WriteLine("[Localization] WARNING: No strings loaded!");
-                    }
+                    EnsureStringsLoaded();
+                    _currentStrings = GetStringsForLanguage(langKey);
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[Localization] Error in SetLanguage: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"[Localization] Stack trace: {ex.StackTrace}");
-                // Fallback to default culture if language code is invalid
+                Instance.Log(LogLevel.Warning, "Error in SetLanguage", ex);
                 _currentCulture = CultureInfo.CurrentUICulture;
                 lock (_lockObject)
                 {
-                    if (_allStrings != null && _allStrings.TryGetValue("en-US", out var defaultStrings))
-                    {
-                        _currentStrings = defaultStrings;
-                    }
+                    EnsureStringsLoaded();
+                    _currentStrings = GetStringsForLanguage("en-US");
                 }
             }
         }
 
+        private static (CultureInfo culture, string langKey) DetermineCulture(string languageCode)
+        {
+            if (string.IsNullOrWhiteSpace(languageCode) || languageCode == "System")
+            {
+                var culture = CultureInfo.CurrentUICulture;
+                return (culture, culture.Name);
+            }
+            else
+            {
+                var culture = new CultureInfo(languageCode);
+                return (culture, languageCode);
+            }
+        }
+
+        private static void SetCulture(CultureInfo culture)
+        {
+            _currentCulture = culture;
+            Thread.CurrentThread.CurrentCulture = culture;
+            Thread.CurrentThread.CurrentUICulture = culture;
+            CultureInfo.DefaultThreadCurrentCulture = culture;
+            CultureInfo.DefaultThreadCurrentUICulture = culture;
+        }
+
+        private static void EnsureStringsLoaded()
+        {
+            if (_allStrings == null)
+            {
+                LoadStrings();
+            }
+        }
+
+        private static Dictionary<string, string> GetStringsForLanguage(string langKey)
+        {
+            if (_allStrings == null)
+            {
+                return new Dictionary<string, string>();
+            }
+
+            if (_allStrings.TryGetValue(langKey, out var strings))
+            {
+                return strings;
+            }
+
+            return _allStrings.TryGetValue("en-US", out var defaultStrings) 
+                ? defaultStrings 
+                : new Dictionary<string, string>();
+        }
+
+        /// <summary>
+        /// Gets a localized string by key.
+        /// </summary>
+        /// <param name="key">The localization key to retrieve.</param>
+        /// <returns>The localized string, or the key itself if not found.</returns>
         public static string GetString(string key)
         {
             try
             {
                 lock (_lockObject)
                 {
-                    if (_currentStrings == null)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Localization] GetString('{key}') - _currentStrings is null, initializing...");
-                        if (_allStrings == null)
-                        {
-                            LoadStrings();
-                        }
-                        if (_allStrings != null && _allStrings.TryGetValue("en-US", out var defaultStringsInit))
-                        {
-                            _currentStrings = defaultStringsInit;
-                        }
-                    }
+                    EnsureStringsLoaded();
+                    EnsureCurrentStringsInitialized();
 
                     if (_currentStrings != null && _currentStrings.TryGetValue(key, out var value))
                     {
                         return value;
                     }
 
-                    // Fallback to English if key not found in current language
-                    if (_allStrings != null && _allStrings.TryGetValue("en-US", out var defaultStringsFallback))
+                    if (_allStrings != null && _allStrings.TryGetValue("en-US", out var defaultStrings))
                     {
-                        if (defaultStringsFallback.TryGetValue(key, out var defaultValue))
+                        if (defaultStrings.TryGetValue(key, out var defaultValue))
                         {
                             return defaultValue;
                         }
                     }
 
-                    System.Diagnostics.Debug.WriteLine($"[Localization] GetString('{key}') - Key not found, returning key as-is");
                     return key;
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[Localization] Error in GetString('{key}'): {ex.Message}");
+                Instance.Log(LogLevel.Warning, $"Error in GetString('{key}')", ex);
                 return key;
             }
         }
 
+        private static void EnsureCurrentStringsInitialized()
+        {
+            if (_currentStrings == null)
+            {
+                EnsureStringsLoaded();
+                _currentStrings = GetStringsForLanguage("en-US");
+            }
+        }
+
+        /// <summary>
+        /// Gets a localized string by key and formats it with the provided arguments.
+        /// </summary>
+        /// <param name="key">The localization key to retrieve.</param>
+        /// <param name="args">Arguments to format into the localized string.</param>
+        /// <returns>The formatted localized string, or the key itself if formatting fails.</returns>
         public static string GetString(string key, params object[] args)
         {
             try

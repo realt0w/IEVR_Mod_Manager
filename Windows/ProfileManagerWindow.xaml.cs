@@ -8,13 +8,28 @@ using IEVRModManager.Models;
 
 namespace IEVRModManager.Windows
 {
+    /// <summary>
+    /// Interaction logic for ProfileManagerWindow.xaml. Allows users to manage mod profiles.
+    /// </summary>
     public partial class ProfileManagerWindow : Window
     {
         private readonly ProfileManager _profileManager;
         private readonly ObservableCollection<ProfileViewModel> _profiles;
+        
+        /// <summary>
+        /// Gets the selected profile, if any.
+        /// </summary>
         public ModProfile? SelectedProfile { get; private set; }
+        
+        /// <summary>
+        /// Gets whether a profile was loaded.
+        /// </summary>
         public bool ProfileLoaded { get; private set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ProfileManagerWindow"/> class.
+        /// </summary>
+        /// <param name="owner">The owner window.</param>
         public ProfileManagerWindow(Window owner)
         {
             InitializeComponent();
@@ -119,16 +134,26 @@ namespace IEVRModManager.Windows
             {
                 var profile = mainWindow.CreateProfileFromCurrentState(profileName);
                 
-                if (_profileManager.SaveProfile(profile))
+                try
                 {
-                    var successWindow = new MessageWindow(this, LocalizationHelper.GetString("ModProfiles"), string.Format(LocalizationHelper.GetString("ProfileSaved"), profileName), MessageType.Success);
-                    successWindow.ShowDialog();
-                    LoadProfiles();
-                    ProfileNameTextBox.Text = string.Empty;
+                    if (_profileManager.SaveProfile(profile))
+                    {
+                        var successWindow = new MessageWindow(this, LocalizationHelper.GetString("ModProfiles"), string.Format(LocalizationHelper.GetString("ProfileSaved"), profileName), MessageType.Success);
+                        successWindow.ShowDialog();
+                        LoadProfiles();
+                        ProfileNameTextBox.Text = string.Empty;
+                    }
                 }
-                else
+                catch (Exceptions.ModManagerException ex)
                 {
-                    var errorWindow = new MessageWindow(this, LocalizationHelper.GetString("ModProfiles"), LocalizationHelper.GetString("ErrorSavingProfile"), MessageType.Error);
+                    var errorWindow = new MessageWindow(this, LocalizationHelper.GetString("ModProfiles"), 
+                        $"{LocalizationHelper.GetString("ErrorSavingProfile")}: {ex.Message}", MessageType.Error);
+                    errorWindow.ShowDialog();
+                }
+                catch (ArgumentNullException ex)
+                {
+                    var errorWindow = new MessageWindow(this, LocalizationHelper.GetString("ModProfiles"), 
+                        $"{LocalizationHelper.GetString("ErrorSavingProfile")}: {ex.Message}", MessageType.Error);
                     errorWindow.ShowDialog();
                 }
             }
@@ -148,14 +173,24 @@ namespace IEVRModManager.Windows
                 var result = resultWindow.ShowDialog();
                 if (result == true && resultWindow.Result == true)
                 {
-                    if (_profileManager.DeleteProfile(selected.Name))
+                    try
                     {
-                        LoadProfiles();
-                        ProfileNameTextBox.Text = string.Empty;
+                        if (_profileManager.DeleteProfile(selected.Name))
+                        {
+                            LoadProfiles();
+                            ProfileNameTextBox.Text = string.Empty;
+                        }
                     }
-                    else
+                    catch (Exceptions.ModManagerException ex)
                     {
-                        var errorWindow = new MessageWindow(this, LocalizationHelper.GetString("ModProfiles"), LocalizationHelper.GetString("ErrorDeletingProfile"), MessageType.Error);
+                        var errorWindow = new MessageWindow(this, LocalizationHelper.GetString("ModProfiles"), 
+                            $"{LocalizationHelper.GetString("ErrorDeletingProfile")}: {ex.Message}", MessageType.Error);
+                        errorWindow.ShowDialog();
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        var errorWindow = new MessageWindow(this, LocalizationHelper.GetString("ModProfiles"), 
+                            $"{LocalizationHelper.GetString("ErrorDeletingProfile")}: {ex.Message}", MessageType.Error);
                         errorWindow.ShowDialog();
                     }
                 }
@@ -173,16 +208,45 @@ namespace IEVRModManager.Windows
         }
     }
 
+    /// <summary>
+    /// ViewModel for displaying profile information in the UI.
+    /// </summary>
     public class ProfileViewModel
     {
+        /// <summary>
+        /// Gets or sets the profile name.
+        /// </summary>
         public string Name { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the creation date.
+        /// </summary>
         public DateTime CreatedDate { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the last modified date.
+        /// </summary>
         public DateTime LastModifiedDate { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the number of mods in the profile as a string.
+        /// </summary>
         public string ModsCount { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Gets or sets the underlying profile object.
+        /// </summary>
         public ModProfile Profile { get; set; } = null!;
         
+        /// <summary>
+        /// Gets the formatted last modified date for display.
+        /// </summary>
         public string LastModifiedDateDisplay => LastModifiedDate.ToString("yyyy-MM-dd HH:mm");
         
+        /// <summary>
+        /// Returns the profile name.
+        /// </summary>
+        /// <returns>The profile name.</returns>
         public override string ToString() => Name;
     }
 }
