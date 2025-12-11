@@ -12,7 +12,7 @@
         </Grid.RowDefinitions>
 
         <!-- Title -->
-        <Label Grid.Row="0" Content="Download Links" 
+        <Label x:Name="TitleLabel" Grid.Row="0" Content="Download Links" 
                FontSize="18" FontWeight="Bold" 
                Foreground="{StaticResource TextBrush}"
                Margin="0,0,0,10"/>
@@ -49,7 +49,8 @@
                        MouseLeftButtonDown="CpkListLink_Click"
                        Margin="0,12"/>
 
-            <Button Content="⬇️ Download cpk_list"
+            <Button x:Name="DownloadCpkListButton"
+                    Content="⬇️ Download cpk_list"
                     Style="{StaticResource PrimaryButtonStyle}"
                     HorizontalAlignment="Left"
                     Width="180"
@@ -58,7 +59,7 @@
         </StackPanel>
 
         <!-- Close Button -->
-        <Button Grid.Row="2" Content="Close" 
+        <Button x:Name="CloseButton" Grid.Row="2" Content="Close" 
                 Style="{StaticResource PrimaryButtonStyle}" 
                 Width="140" HorizontalAlignment="Right" 
                 Click="Close_Click" Margin="0,20,0,0"/>

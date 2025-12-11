@@ -39,7 +39,9 @@ namespace IEVRModManager.Managers
         }
 
         public bool Save(string gamePath, string selectedCpkName, string cfgBinPath, string violaCliPath, 
-            string tmpDir, System.Collections.Generic.List<ModEntry> modEntries)
+            string tmpDir, System.Collections.Generic.List<ModEntry> modEntries,
+            string lastKnownPacksSignature, string lastKnownSteamBuildId,
+            DateTime vanillaFallbackUntilUtc, string theme, string language, string lastAppliedProfile = "")
         {
             try
             {
@@ -51,6 +53,12 @@ namespace IEVRModManager.Managers
                     CfgBinPath = cfgBinPath,
                     ViolaCliPath = violaCliPath,
                     TmpDir = tmpDir,
+                    LastKnownPacksSignature = lastKnownPacksSignature,
+                    LastKnownSteamBuildId = lastKnownSteamBuildId,
+                    VanillaFallbackUntilUtc = vanillaFallbackUntilUtc,
+                    Theme = theme,
+                    Language = language,
+                    LastAppliedProfile = lastAppliedProfile,
                     Mods = modEntries.ConvertAll(me => me.ToData())
                 };
 

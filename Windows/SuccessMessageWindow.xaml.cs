@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
+using IEVRModManager.Helpers;
 
 namespace IEVRModManager.Windows
 {
@@ -11,7 +12,12 @@ namespace IEVRModManager.Windows
         {
             InitializeComponent();
             Owner = parent;
+            
+            // Update localized texts
+            Title = LocalizationHelper.GetString("ModsApplied");
+            TitleText.Text = LocalizationHelper.GetString("ModsAppliedSuccessfully");
             MessageTextBlock.Text = message;
+            OKButton.Content = LocalizationHelper.GetString("OK");
             
             // Show mod list if provided
             if (modNames != null && modNames.Any())

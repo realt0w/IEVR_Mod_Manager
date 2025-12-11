@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
+using IEVRModManager.Helpers;
 
 namespace IEVRModManager.Windows
 {
@@ -13,6 +14,16 @@ namespace IEVRModManager.Windows
         {
             InitializeComponent();
             Owner = parent;
+
+            // Update localized texts
+            Title = Helpers.LocalizationHelper.GetString("DataPacksWarning");
+            TitleText.Text = Helpers.LocalizationHelper.GetString("WarningDataPacks");
+            WarningMessage1.Text = Helpers.LocalizationHelper.GetString("PacksWarningMessage1");
+            WarningMessage2.Text = Helpers.LocalizationHelper.GetString("PacksWarningMessage2");
+            WarningMessage3.Text = Helpers.LocalizationHelper.GetString("PacksWarningMessage3");
+            WarningMessage4.Text = Helpers.LocalizationHelper.GetString("PacksWarningMessage4");
+            CancelButton.Content = Helpers.LocalizationHelper.GetString("Cancel");
+            ContinueButton.Content = Helpers.LocalizationHelper.GetString("Continue");
 
             ModsListControl.ItemsSource = modNames?.Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>();
 

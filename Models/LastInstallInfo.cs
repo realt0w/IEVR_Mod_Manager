@@ -9,6 +9,8 @@ namespace IEVRModManager.Models
         public List<string> Files { get; set; } = new List<string>();
         public List<string> Mods { get; set; } = new List<string>();
         public DateTime AppliedAt { get; set; } = DateTime.MinValue;
+        public string SelectedCpkName { get; set; } = string.Empty;
+        public string SelectedCpkInfo { get; set; } = string.Empty;
 
         public static LastInstallInfo Empty()
         {
@@ -17,7 +19,9 @@ namespace IEVRModManager.Models
                 GamePath = string.Empty,
                 Files = new List<string>(),
                 Mods = new List<string>(),
-                AppliedAt = DateTime.MinValue
+                AppliedAt = DateTime.MinValue,
+                SelectedCpkName = string.Empty,
+                SelectedCpkInfo = string.Empty
             };
         }
     }

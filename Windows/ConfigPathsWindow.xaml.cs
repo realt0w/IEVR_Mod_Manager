@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Forms;
 using IEVRModManager.Models;
+using IEVRModManager.Helpers;
 using System.Threading.Tasks;
 
 namespace IEVRModManager.Windows
@@ -27,8 +28,120 @@ namespace IEVRModManager.Windows
             
             DataContext = _config;
             
+            // Update localized texts
+            UpdateLocalizedTexts();
+            
             // Ensure initial values are displayed correctly
             GamePathTextBox.Text = _config.GamePath ?? string.Empty;
+            
+            // Set up language combo box
+            if (LanguageComboBox != null)
+            {
+                string language = string.IsNullOrWhiteSpace(_config.Language) ? "System" : _config.Language;
+                foreach (System.Windows.Controls.ComboBoxItem item in LanguageComboBox.Items)
+                {
+                    if (item.Tag?.ToString() == language)
+                    {
+                        LanguageComboBox.SelectedItem = item;
+                        break;
+                    }
+                }
+            }
+
+            // Set up theme combo box
+            if (ThemeComboBox != null)
+            {
+                string theme = string.IsNullOrWhiteSpace(_config.Theme) ? "System" : _config.Theme;
+                foreach (System.Windows.Controls.ComboBoxItem item in ThemeComboBox.Items)
+                {
+                    if (item.Tag?.ToString() == theme)
+                    {
+                        ThemeComboBox.SelectedItem = item;
+                        break;
+                    }
+                }
+            }
+        }
+
+        private void LanguageComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.ComboBox comboBox && comboBox.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
+            {
+                string language = selectedItem.Tag?.ToString() ?? "System";
+                string previousLanguage = _config.Language ?? "System";
+                
+                // Only show message if language actually changed
+                if (language != previousLanguage)
+                {
+                    _config.Language = language;
+                    _saveCallback?.Invoke();
+                    
+                    // Show modal with restart option (same as theme change)
+                    string languageName = language == "System" ? LocalizationHelper.GetString("System") + " (follows OS language)" : 
+                                         language == "en-US" ? LocalizationHelper.GetString("English") : 
+                                         language == "es-ES" ? LocalizationHelper.GetString("Espanol") : language;
+                    var themeWindow = new ThemeChangeWindow(this, string.Format(LocalizationHelper.GetString("LanguageChangedMessage"), languageName));
+                    var result = themeWindow.ShowDialog();
+                    
+                    if (result == true && themeWindow.UserChoseRestart)
+                    {
+                        // Restart the application
+                        var appPath = Environment.ProcessPath ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                        if (string.IsNullOrEmpty(appPath))
+                        {
+                            // Fallback: use the executable name from the current process
+                            appPath = System.IO.Path.Combine(AppContext.BaseDirectory, System.Diagnostics.Process.GetCurrentProcess().ProcessName + ".exe");
+                        }
+                        
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = appPath,
+                            UseShellExecute = true
+                        });
+                        System.Windows.Application.Current.Shutdown();
+                    }
+                }
+            }
+        }
+
+        private void ThemeComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.ComboBox comboBox && comboBox.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
+            {
+                string theme = selectedItem.Tag?.ToString() ?? "System";
+                string previousTheme = _config.Theme ?? "System";
+                
+                // Only show message if theme actually changed
+                if (theme != previousTheme)
+                {
+                    _config.Theme = theme;
+                    _saveCallback?.Invoke();
+                    
+                    // Show modal with restart option
+                    string themeName = theme == "System" ? LocalizationHelper.GetString("System") + " (follows OS theme)" : theme;
+                    var themeWindow = new ThemeChangeWindow(this, themeName);
+                    var result = themeWindow.ShowDialog();
+                    
+                    if (result == true && themeWindow.UserChoseRestart)
+                    {
+                        // Restart the application
+                        // Use Environment.ProcessPath for single-file apps, fallback to executable name
+                        var appPath = Environment.ProcessPath ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                        if (string.IsNullOrEmpty(appPath))
+                        {
+                            // Fallback: use the executable name from the current process
+                            appPath = System.IO.Path.Combine(AppContext.BaseDirectory, System.Diagnostics.Process.GetCurrentProcess().ProcessName + ".exe");
+                        }
+                        
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = appPath,
+                            UseShellExecute = true
+                        });
+                        System.Windows.Application.Current.Shutdown();
+                    }
+                }
+            }
         }
 
         private void BrowseGame_Click(object sender, RoutedEventArgs e)
@@ -51,6 +164,53 @@ namespace IEVRModManager.Windows
             {
                 _config.GamePath = textBox.Text;
                 _saveCallback?.Invoke();
+            }
+        }
+
+        private void UpdateLocalizedTexts()
+        {
+            Title = LocalizationHelper.GetString("ConfigTitle");
+            ConfigTitleLabel.Content = LocalizationHelper.GetString("ConfigTitle");
+            ConfigInfoLabel.Content = LocalizationHelper.GetString("ConfigSavedAutomatically");
+            GamePathLabel.Content = LocalizationHelper.GetString("GamePath");
+            BrowseButton.Content = LocalizationHelper.GetString("Browse");
+            CpkStorageLabel.Content = LocalizationHelper.GetString("CpkStorageFolder");
+            CpkStorageDescription.Text = LocalizationHelper.GetString("CpkStorageDescription");
+            OpenCpkStorageButton.Content = LocalizationHelper.GetString("OpenFolder");
+            ViolaCLILabel.Content = LocalizationHelper.GetString("ViolaCLIFolder");
+            ViolaCLIDescription.Text = LocalizationHelper.GetString("ViolaCLIDescription");
+            OpenViolaStorageButton.Content = LocalizationHelper.GetString("OpenFolder");
+            LanguageLabel.Content = LocalizationHelper.GetString("LanguageLabel");
+            ThemeLabel.Content = LocalizationHelper.GetString("ThemeLabel");
+            CreateBackupButton.Content = LocalizationHelper.GetString("CreateBackup");
+            RestoreBackupButton.Content = LocalizationHelper.GetString("RestoreBackup");
+            CloseButton.Content = LocalizationHelper.GetString("Close");
+            
+            // Update combo box items
+            if (LanguageComboBox != null)
+            {
+                foreach (System.Windows.Controls.ComboBoxItem item in LanguageComboBox.Items)
+                {
+                    if (item.Tag?.ToString() == "System")
+                        item.Content = LocalizationHelper.GetString("System");
+                    else if (item.Tag?.ToString() == "en-US")
+                        item.Content = LocalizationHelper.GetString("English");
+                    else if (item.Tag?.ToString() == "es-ES")
+                        item.Content = LocalizationHelper.GetString("Espanol");
+                }
+            }
+            
+            if (ThemeComboBox != null)
+            {
+                foreach (System.Windows.Controls.ComboBoxItem item in ThemeComboBox.Items)
+                {
+                    if (item.Tag?.ToString() == "System")
+                        item.Content = LocalizationHelper.GetString("System");
+                    else if (item.Tag?.ToString() == "Light")
+                        item.Content = LocalizationHelper.GetString("Light");
+                    else if (item.Tag?.ToString() == "Dark")
+                        item.Content = LocalizationHelper.GetString("Dark");
+                }
             }
         }
 
@@ -101,6 +261,15 @@ namespace IEVRModManager.Windows
                 return;
             }
 
+            // Show confirmation dialog
+            var confirmWindow = new BackupConfirmationWindow(this,
+                Helpers.LocalizationHelper.GetString("CreateBackupConfirmMessage"), false);
+            var result = confirmWindow.ShowDialog();
+            if (result != true || !confirmWindow.UserConfirmed)
+            {
+                return;
+            }
+
             try
             {
                 await _createBackupAction.Invoke();
@@ -115,6 +284,15 @@ namespace IEVRModManager.Windows
         private async void RestoreBackup_Click(object sender, RoutedEventArgs e)
         {
             if (_restoreBackupAction == null)
+            {
+                return;
+            }
+
+            // Show confirmation dialog
+            var confirmWindow = new BackupConfirmationWindow(this,
+                Helpers.LocalizationHelper.GetString("RestoreBackupConfirmMessage"), true);
+            var result = confirmWindow.ShowDialog();
+            if (result != true || !confirmWindow.UserConfirmed)
             {
                 return;
             }

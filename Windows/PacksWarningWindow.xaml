@@ -28,7 +28,8 @@
                            Foreground="{StaticResource WarningBrush}"
                            VerticalAlignment="Center"
                            Margin="0,0,12,0"/>
-                <TextBlock Text="Warning: data/packs"
+                <TextBlock x:Name="TitleText"
+                           Text="Warning: data/packs"
                            FontSize="18"
                            FontWeight="Bold"
                            Foreground="{StaticResource TextBrush}"
@@ -41,10 +42,10 @@
                        FontSize="14"
                        Foreground="{StaticResource TextBrush}"
                        Margin="0,0,0,15">
-                <Run Text="Some mods will modify the "/>
-                <Run Text="data/packs" FontWeight="Bold"/>
-                <Run Text=" folder. This is not recommended and may corrupt your game installation. "/>
-                <Run Text="You can cancel or continue at your own risk."/>
+                <Run x:Name="WarningMessage1" Text="Some mods will modify the "/>
+                <Run x:Name="WarningMessage2" Text="data/packs" FontWeight="Bold"/>
+                <Run x:Name="WarningMessage3" Text=" folder. This is not recommended and may corrupt your game installation. "/>
+                <Run x:Name="WarningMessage4" Text="You can cancel or continue at your own risk."/>
             </TextBlock>
 
             <!-- Mods List -->
@@ -92,9 +93,18 @@
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource AccentButtonStyle}">
                             <Setter Property="Background" Value="{StaticResource ErrorBrush}"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderBrush" Value="{StaticResource ErrorBrush}"/>
                             <Style.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter Property="Background" Value="#d46b5a"/>
+                                    <Setter Property="BorderBrush" Value="#d46b5a"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter Property="Background" Value="#c05a4a"/>
+                                    <Setter Property="BorderBrush" Value="#c05a4a"/>
+                                    <Setter Property="Foreground" Value="White"/>
                                 </Trigger>
                             </Style.Triggers>
                         </Style>

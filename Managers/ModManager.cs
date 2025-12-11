@@ -36,15 +36,36 @@ namespace IEVRModManager.Managers
             var savedMap = (savedMods ?? new List<ModData>())
                 .ToDictionary(m => m.Name, m => m.Enabled);
 
-            // Preserve order from saved config
-            var savedOrder = (savedMods ?? new List<ModData>())
-                .Select(m => m.Name)
-                .ToList();
+            // Preserve order from existing entries (current UI order) if available
+            // Otherwise fall back to saved config order
+            List<string> orderedNames;
+            if (existingEntries != null && existingEntries.Count > 0)
+            {
+                // Use the current order of existing entries
+                var existingOrder = existingEntries
+                    .Select(me => me.Name)
+                    .Where(n => modNames.Contains(n)) // Only keep mods that still exist
+                    .ToList();
+                
+                // Add new mods at the end
+                var newMods = modNames
+                    .Where(n => !existingOrder.Contains(n))
+                    .ToList();
+                
+                orderedNames = existingOrder.Concat(newMods).ToList();
+            }
+            else
+            {
+                // Fall back to saved config order if no existing entries
+                var savedOrder = (savedMods ?? new List<ModData>())
+                    .Select(m => m.Name)
+                    .ToList();
 
-            var orderedNames = savedOrder
-                .Where(n => modNames.Contains(n))
-                .Concat(modNames.Where(n => !savedOrder.Contains(n)))
-                .ToList();
+                orderedNames = savedOrder
+                    .Where(n => modNames.Contains(n))
+                    .Concat(modNames.Where(n => !savedOrder.Contains(n)))
+                    .ToList();
+            }
 
             // Create mod entries
             var modEntries = new List<ModEntry>();

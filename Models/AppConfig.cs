@@ -13,6 +13,12 @@ namespace IEVRModManager.Models
         private string _violaCliPath = string.Empty;
         private string _tmpDir = string.Empty;
         private string _selectedCpkName = string.Empty;
+        private string _lastKnownPacksSignature = string.Empty;
+        private string _lastKnownSteamBuildId = string.Empty;
+        private DateTime _vanillaFallbackUntilUtc = DateTime.MinValue;
+        private string _theme = "System";
+        private string _language = "System";
+        private string _lastAppliedProfile = string.Empty;
 
         public string GamePath
         {
@@ -44,6 +50,42 @@ namespace IEVRModManager.Models
             set { _tmpDir = value; OnPropertyChanged(); }
         }
 
+        public string LastKnownPacksSignature
+        {
+            get => _lastKnownPacksSignature;
+            set { _lastKnownPacksSignature = value; OnPropertyChanged(); }
+        }
+
+        public string LastKnownSteamBuildId
+        {
+            get => _lastKnownSteamBuildId;
+            set { _lastKnownSteamBuildId = value; OnPropertyChanged(); }
+        }
+
+        public DateTime VanillaFallbackUntilUtc
+        {
+            get => _vanillaFallbackUntilUtc;
+            set { _vanillaFallbackUntilUtc = value; OnPropertyChanged(); }
+        }
+
+        public string Theme
+        {
+            get => _theme;
+            set { _theme = value; OnPropertyChanged(); }
+        }
+
+        public string Language
+        {
+            get => _language;
+            set { _language = value; OnPropertyChanged(); }
+        }
+
+        public string LastAppliedProfile
+        {
+            get => _lastAppliedProfile;
+            set { _lastAppliedProfile = value; OnPropertyChanged(); }
+        }
+
         public List<ModData> Mods { get; set; } = new List<ModData>();
 
         public static AppConfig Default()
@@ -54,7 +96,13 @@ namespace IEVRModManager.Models
                 CfgBinPath = string.Empty,
                 ViolaCliPath = string.Empty,
                 SelectedCpkName = string.Empty,
+                LastKnownPacksSignature = string.Empty,
+                LastKnownSteamBuildId = string.Empty,
+                VanillaFallbackUntilUtc = DateTime.MinValue,
                 TmpDir = Config.DefaultTmpDir,
+                Theme = "System",
+                Language = "System",
+                LastAppliedProfile = string.Empty,
                 Mods = new List<ModData>()
             };
         }

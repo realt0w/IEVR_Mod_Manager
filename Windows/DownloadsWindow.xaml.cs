@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using IEVRModManager;
+using IEVRModManager.Helpers;
 
 namespace IEVRModManager.Windows
 {
@@ -12,6 +13,20 @@ namespace IEVRModManager.Windows
         {
             InitializeComponent();
             Owner = parent;
+            
+            // Update localized texts
+            UpdateLocalizedTexts();
+        }
+        
+        private void UpdateLocalizedTexts()
+        {
+            Title = LocalizationHelper.GetString("Downloads");
+            TitleLabel.Content = LocalizationHelper.GetString("DownloadLinks");
+            GameBananaLink.Text = LocalizationHelper.GetString("DownloadModsFromGameBanana");
+            ViolaLink.Text = LocalizationHelper.GetString("DownloadViolaCLI");
+            CpkListLink.Text = LocalizationHelper.GetString("CpkListRepository");
+            DownloadCpkListButton.Content = LocalizationHelper.GetString("DownloadCpkList");
+            CloseButton.Content = LocalizationHelper.GetString("Close");
         }
 
         private void Link_MouseEnter(object sender, MouseEventArgs e)
@@ -19,7 +34,6 @@ namespace IEVRModManager.Windows
             if (sender is System.Windows.Controls.TextBlock textBlock)
             {
                 textBlock.TextDecorations = System.Windows.TextDecorations.Underline;
-                textBlock.FontSize = 13;
             }
         }
 
@@ -28,7 +42,6 @@ namespace IEVRModManager.Windows
             if (sender is System.Windows.Controls.TextBlock textBlock)
             {
                 textBlock.TextDecorations = null;
-                textBlock.FontSize = 12;
             }
         }
 

@@ -28,7 +28,8 @@
                            Foreground="{StaticResource SuccessBrush}"
                            VerticalAlignment="Center"
                            Margin="0,0,12,0"/>
-                <TextBlock Text="Mods Applied Successfully" 
+                <TextBlock x:Name="TitleText"
+                           Text="Mods Applied Successfully" 
                            FontSize="18" 
                            FontWeight="Bold"
                            Foreground="{StaticResource TextBrush}"
@@ -76,7 +77,8 @@
             </ScrollViewer>
 
             <!-- OK Button -->
-            <Button Grid.Row="3" 
+            <Button x:Name="OKButton"
+                    Grid.Row="3" 
                     Content="OK" 
                     Style="{StaticResource AccentButtonStyle}" 
                     Width="100" 

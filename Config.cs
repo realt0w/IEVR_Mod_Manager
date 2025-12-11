@@ -34,6 +34,7 @@ namespace IEVRModManager
         public static string SharedStorageCpkDir => EnsureDirectory(Path.Combine(SharedStorageDir, SharedStorageCpkDirName));
         public static string SharedStorageViolaDir => EnsureDirectory(Path.Combine(SharedStorageDir, SharedStorageViolaDirName));
         public static string BackupDir => EnsureDirectory(Path.Combine(BaseDir, BackupDirName));
+        public static string AppDataDir => BaseDir;
 
         // UI Configuration
         public const string WindowTitle = "IEVR Mod Manager";

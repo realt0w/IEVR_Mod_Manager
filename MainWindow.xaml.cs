@@ -11,10 +11,14 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using System.Security.Cryptography;
+using System.Text;
+using System.Xml.Linq;
 using Microsoft.Win32;
 using IEVRModManager.Managers;
 using IEVRModManager.Models;
 using IEVRModManager.Windows;
+using IEVRModManager.Helpers;
 
 namespace IEVRModManager
 {
@@ -24,6 +28,7 @@ namespace IEVRModManager
         private readonly ModManager _modManager;
         private readonly LastInstallManager _lastInstallManager;
         private readonly ViolaIntegration _viola;
+        private readonly Managers.ProfileManager _profileManager;
         private ObservableCollection<ModEntryViewModel> _modEntries;
         private readonly ObservableCollection<CpkOption> _availableCpkFiles = new();
         private static readonly HttpClient _httpClient = new();
@@ -31,6 +36,11 @@ namespace IEVRModManager
         private bool _isApplying;
         private bool _isDownloadingCpkLists;
         private DispatcherTimer? _playResetTimer;
+        private DispatcherTimer? _updateCheckTimer;
+        private bool _isCheckingUpdates;
+        private bool _vanillaSeedAttempted;
+        private string? _previousProfileSelection;
+        private static readonly DateTime VanillaFallbackCutoffUtc = new DateTime(2025, 12, 7, 0, 0, 0, DateTimeKind.Utc);
 
         public MainWindow()
         {
@@ -40,6 +50,7 @@ namespace IEVRModManager
             _modManager = new ModManager();
             _lastInstallManager = new LastInstallManager();
             _viola = new ViolaIntegration(message => Log(message, "info"));
+            _profileManager = new Managers.ProfileManager();
             _modEntries = new ObservableCollection<ModEntryViewModel>();
             
             ModsListView.ItemsSource = _modEntries;
@@ -48,15 +59,325 @@ namespace IEVRModManager
             
             LoadConfig();
             EnsureStorageStructure();
+            MigrateLegacyVanillaName(Config.SharedStorageCpkDir);
             RefreshCpkOptions();
+            
+            // Load last applied profile before scanning mods to preserve its state
+            LoadLastAppliedProfileOnStartup();
+            
             ScanMods();
             CleanupTempDir();
+            
+            // Update localized texts after window is loaded
+            Loaded += (s, e) => 
+            {
+                UpdateLocalizedTexts();
+                RefreshProfileSelector();
+                // Update selector to show the loaded profile
+                if (!string.IsNullOrWhiteSpace(_config.LastAppliedProfile))
+                {
+                    _isRefreshingProfileSelector = true;
+                    try
+                    {
+                        if (ProfileSelector.Items.Contains(_config.LastAppliedProfile))
+                        {
+                            ProfileSelector.SelectedItem = _config.LastAppliedProfile;
+                            _previousProfileSelection = _config.LastAppliedProfile;
+                        }
+                    }
+                    finally
+                    {
+                        _isRefreshingProfileSelector = false;
+                    }
+                }
+            };
+            
+            _ = DetectGameUpdateAsync();
+            StartUpdateCheckTimer();
             _ = DownloadAndRefreshCpkListsAsync();
+            _ = GameBananaBrowserWindow.PrefetchModsAsync(this);
         }
 
         private void LoadConfig()
         {
             _config = _configManager.Load();
+        }
+
+        private void UpdateLocalizedTexts()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[Localization] Updating localized texts...");
+                
+                // Update window title
+                var appTitle = LocalizationHelper.GetString("AppTitle");
+                Title = appTitle;
+                System.Diagnostics.Debug.WriteLine($"[Localization] AppTitle = '{appTitle}'");
+                
+                // Update title label
+                if (TitleLabel != null)
+                {
+                    TitleLabel.Content = appTitle;
+                    System.Diagnostics.Debug.WriteLine("[Localization] Updated TitleLabel");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("[Localization] WARNING: TitleLabel is null");
+                }
+                
+                // Update group boxes
+                if (ModsGroupBox != null)
+                {
+                    ModsGroupBox.Header = LocalizationHelper.GetString("Mods");
+                    System.Diagnostics.Debug.WriteLine("[Localization] Updated ModsGroupBox");
+                }
+                if (ActionsGroupBox != null)
+                {
+                    ActionsGroupBox.Header = LocalizationHelper.GetString("Actions");
+                    System.Diagnostics.Debug.WriteLine("[Localization] Updated ActionsGroupBox");
+                }
+                if (ActivityLogGroupBox != null)
+                {
+                    ActivityLogGroupBox.Header = LocalizationHelper.GetString("ActivityLog");
+                    System.Diagnostics.Debug.WriteLine("[Localization] Updated ActivityLogGroupBox");
+                }
+                
+                // Update buttons
+                if (ScanModsButton != null)
+                    ScanModsButton.Content = LocalizationHelper.GetString("ScanMods");
+                if (OpenModsFolderButton != null)
+                    OpenModsFolderButton.Content = LocalizationHelper.GetString("OpenModsFolder");
+                if (VersionLabel != null)
+                    VersionLabel.Content = LocalizationHelper.GetString("Version");
+                if (ApplyButton != null)
+                    ApplyButton.Content = LocalizationHelper.GetString("ApplyChanges");
+                if (PlayButton != null)
+                    PlayButton.Content = LocalizationHelper.GetString("Play");
+                if (BrowseModsButton != null)
+                    BrowseModsButton.Content = LocalizationHelper.GetString("BrowseMods");
+                if (MoveUpButton != null)
+                    MoveUpButton.Content = LocalizationHelper.GetString("MoveUp");
+                if (MoveDownButton != null)
+                    MoveDownButton.Content = LocalizationHelper.GetString("MoveDown");
+                if (EnableAllButton != null)
+                    EnableAllButton.Content = LocalizationHelper.GetString("EnableAll");
+                if (DisableAllButton != null)
+                    DisableAllButton.Content = LocalizationHelper.GetString("DisableAll");
+                if (ConfigurationButton != null)
+                    ConfigurationButton.Content = LocalizationHelper.GetString("Configuration");
+                if (LinksButton != null)
+                    LinksButton.Content = LocalizationHelper.GetString("Links");
+                if (HelpLink != null)
+                    HelpLink.Text = LocalizationHelper.GetString("Help");
+                if (CopyLogButton != null)
+                    CopyLogButton.Content = LocalizationHelper.GetString("CopyLog");
+                if (SaveLogButton != null)
+                    SaveLogButton.Content = LocalizationHelper.GetString("SaveLog");
+                if (ExitButton != null)
+                    ExitButton.Content = LocalizationHelper.GetString("Exit");
+                if (ManageProfilesButton != null)
+                    ManageProfilesButton.Content = LocalizationHelper.GetString("ManageProfiles");
+                
+                System.Diagnostics.Debug.WriteLine("[Localization] Finished updating localized texts");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Localization] Error updating localized texts: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[Localization] Stack trace: {ex.StackTrace}");
+            }
+        }
+
+        private bool _isRefreshingProfileSelector = false;
+
+        private void RefreshProfileSelector()
+        {
+            if (ProfileSelector == null) return;
+
+            _isRefreshingProfileSelector = true;
+            
+            try
+            {
+                var selectedProfile = ProfileSelector.SelectedItem?.ToString();
+                ProfileSelector.Items.Clear();
+                
+                // Add "None" option
+                var noProfileText = LocalizationHelper.GetString("NoProfile");
+                ProfileSelector.Items.Add(noProfileText);
+                
+                // Add all profiles
+                var profiles = _profileManager.GetAllProfiles();
+                foreach (var profile in profiles)
+                {
+                    ProfileSelector.Items.Add(profile.Name);
+                }
+                
+                // Restore selection if it still exists
+                if (!string.IsNullOrEmpty(selectedProfile) && ProfileSelector.Items.Contains(selectedProfile))
+                {
+                    ProfileSelector.SelectedItem = selectedProfile;
+                    _previousProfileSelection = selectedProfile;
+                }
+                else
+                {
+                    ProfileSelector.SelectedIndex = 0; // Select "None"
+                    _previousProfileSelection = noProfileText;
+                }
+            }
+            finally
+            {
+                _isRefreshingProfileSelector = false;
+            }
+        }
+
+        private void ProfileSelector_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            // Ignore events triggered by programmatic changes
+            if (_isRefreshingProfileSelector) return;
+            
+            if (ProfileSelector?.SelectedItem == null) return;
+            
+            var selectedProfileName = ProfileSelector.SelectedItem.ToString();
+            if (string.IsNullOrEmpty(selectedProfileName) || selectedProfileName == LocalizationHelper.GetString("NoProfile"))
+            {
+                _previousProfileSelection = selectedProfileName;
+                return;
+            }
+
+            // Prevent loading the same profile twice
+            if (selectedProfileName == _previousProfileSelection)
+            {
+                return;
+            }
+
+            var profile = _profileManager.LoadProfile(selectedProfileName);
+            if (profile != null)
+            {
+                _previousProfileSelection = selectedProfileName;
+                LoadProfile(profile);
+                // Refresh to update the selector, but don't trigger selection change
+                _isRefreshingProfileSelector = true;
+                try
+                {
+                    ProfileSelector.SelectedItem = selectedProfileName;
+                }
+                finally
+                {
+                    _isRefreshingProfileSelector = false;
+                }
+            }
+            else
+            {
+                // Profile not found, restore previous selection
+                _isRefreshingProfileSelector = true;
+                try
+                {
+                    ProfileSelector.SelectedItem = _previousProfileSelection ?? LocalizationHelper.GetString("NoProfile");
+                }
+                finally
+                {
+                    _isRefreshingProfileSelector = false;
+                }
+            }
+        }
+
+        private void LoadLastAppliedProfileOnStartup()
+        {
+            if (string.IsNullOrWhiteSpace(_config.LastAppliedProfile))
+            {
+                return;
+            }
+
+            var profile = _profileManager.LoadProfile(_config.LastAppliedProfile);
+            if (profile != null)
+            {
+                // Update config with profile mods before ScanMods runs
+                // This ensures ScanMods uses the profile's mod state
+                _config.Mods = profile.Mods;
+                
+                if (!string.IsNullOrWhiteSpace(profile.SelectedCpkName))
+                {
+                    _config.SelectedCpkName = profile.SelectedCpkName;
+                }
+                
+                Log($"Last applied profile '{profile.Name}' will be loaded on startup.", "info");
+            }
+            else
+            {
+                // Profile not found, clear the saved profile name
+                _config.LastAppliedProfile = string.Empty;
+            }
+        }
+
+        private void LoadLastAppliedProfile()
+        {
+            if (string.IsNullOrWhiteSpace(_config.LastAppliedProfile))
+            {
+                return;
+            }
+
+            var profile = _profileManager.LoadProfile(_config.LastAppliedProfile);
+            if (profile != null)
+            {
+                // Load profile silently (without showing confirmation)
+                var profileModMap = profile.Mods.ToDictionary(m => m.Name, m => m.Enabled);
+                
+                foreach (var modEntry in _modEntries)
+                {
+                    if (profileModMap.ContainsKey(modEntry.Name))
+                    {
+                        modEntry.Enabled = profileModMap[modEntry.Name];
+                    }
+                    else
+                    {
+                        modEntry.Enabled = false;
+                    }
+                }
+                
+                if (!string.IsNullOrWhiteSpace(profile.SelectedCpkName))
+                {
+                    _config.SelectedCpkName = profile.SelectedCpkName;
+                    RefreshCpkOptions();
+                }
+                
+                SaveConfig();
+                RefreshProfileSelector();
+                
+                // Set the selector to show the loaded profile
+                _isRefreshingProfileSelector = true;
+                try
+                {
+                    if (ProfileSelector.Items.Contains(profile.Name))
+                    {
+                        ProfileSelector.SelectedItem = profile.Name;
+                        _previousProfileSelection = profile.Name;
+                    }
+                }
+                finally
+                {
+                    _isRefreshingProfileSelector = false;
+                }
+                
+                Log($"Last applied profile '{profile.Name}' loaded on startup.", "info");
+            }
+            else
+            {
+                // Profile not found, clear the saved profile name
+                _config.LastAppliedProfile = string.Empty;
+                SaveConfig();
+            }
+        }
+
+        private void ManageProfilesButton_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new Windows.ProfileManagerWindow(this);
+            var result = window.ShowDialog();
+            
+            if (result == true && window.ProfileLoaded && window.SelectedProfile != null)
+            {
+                LoadProfile(window.SelectedProfile);
+            }
+            
+            RefreshProfileSelector();
         }
 
         private static void EnsureStorageStructure()
@@ -70,13 +391,24 @@ namespace IEVRModManager
         {
             try
             {
+                MigrateLegacyVanillaName(Config.SharedStorageCpkDir);
+                if (string.Equals(_config.SelectedCpkName, "VanillaCpkList.cfg.bin", StringComparison.OrdinalIgnoreCase))
+                {
+                    _config.SelectedCpkName = "LatestCpkList.cfg.bin";
+                    if (!string.IsNullOrWhiteSpace(_config.CfgBinPath) &&
+                        _config.CfgBinPath.EndsWith("VanillaCpkList.cfg.bin", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _config.CfgBinPath = Path.Combine(Config.SharedStorageCpkDir, "LatestCpkList.cfg.bin");
+                    }
+                }
+
                 var cpkDir = Config.SharedStorageCpkDir;
                 var files = Directory.Exists(cpkDir)
                     ? Directory.GetFiles(cpkDir, "*.bin", SearchOption.TopDirectoryOnly)
                         .Concat(Directory.GetFiles(cpkDir, "*.cfg.bin", SearchOption.TopDirectoryOnly))
                         .Where(f => !string.IsNullOrWhiteSpace(Path.GetFileName(f)))
                         .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .OrderBy(Path.GetFileName)
+                        .OrderByDescending(Path.GetFileName)
                         .ToList()
                     : new List<string>();
 
@@ -125,6 +457,57 @@ namespace IEVRModManager
             }
         }
 
+        public ModProfile CreateProfileFromCurrentState(string profileName)
+        {
+            var modData = _modEntries.Select(me => new ModData
+            {
+                Name = me.Name,
+                Enabled = me.Enabled,
+                ModLink = me.ModLink
+            }).ToList();
+
+            return new ModProfile
+            {
+                Name = profileName,
+                Mods = modData,
+                SelectedCpkName = _config.SelectedCpkName
+            };
+        }
+
+        public void LoadProfile(ModProfile profile)
+        {
+            // Create a map of profile mods
+            var profileModMap = profile.Mods.ToDictionary(m => m.Name, m => m.Enabled);
+            
+            // Update enabled state and preserve order
+            foreach (var modEntry in _modEntries)
+            {
+                if (profileModMap.ContainsKey(modEntry.Name))
+                {
+                    modEntry.Enabled = profileModMap[modEntry.Name];
+                }
+                else
+                {
+                    // Disable mods not in profile
+                    modEntry.Enabled = false;
+                }
+            }
+            
+            // Update selected CPK if profile has one
+            if (!string.IsNullOrWhiteSpace(profile.SelectedCpkName))
+            {
+                _config.SelectedCpkName = profile.SelectedCpkName;
+                RefreshCpkOptions();
+            }
+            
+            // Save the profile name as last applied
+            _config.LastAppliedProfile = profile.Name;
+            
+            SaveConfig();
+            RefreshProfileSelector();
+            Log($"Profile '{profile.Name}' loaded.", "info");
+        }
+
         private void SaveConfig()
         {
             var modData = _modEntries.Select(me => new ModData
@@ -150,7 +533,13 @@ namespace IEVRModManager
                     ModVersion = me.ModVersion,
                     GameVersion = me.GameVersion,
                     ModLink = me.ModLink
-                }).ToList()
+                }).ToList(),
+                _config.LastKnownPacksSignature,
+                _config.LastKnownSteamBuildId,
+                _config.VanillaFallbackUntilUtc,
+                _config.Theme,
+                _config.Language,
+                _config.LastAppliedProfile
             );
 
             if (!success)
@@ -279,6 +668,8 @@ namespace IEVRModManager
                 {
                     Log("No new cpk_list files downloaded (they may already exist).", "info");
                 }
+
+                await EnsureInitialVanillaSeedAsync();
             }
             catch (Exception ex)
             {
@@ -490,6 +881,15 @@ namespace IEVRModManager
                 return;
             }
 
+            // Show confirmation dialog
+            var confirmWindow = new Windows.BackupConfirmationWindow(this,
+                Helpers.LocalizationHelper.GetString("CreateBackupConfirmMessage"), false);
+            var result = confirmWindow.ShowDialog();
+            if (result != true || !confirmWindow.UserConfirmed)
+            {
+                return;
+            }
+
             try
             {
                 SetApplyButtonEnabled(false);
@@ -535,6 +935,15 @@ namespace IEVRModManager
                 MessageBox.Show("No backup folder was found in the manager data folder.", "Backup not found",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 Log("No backup folder found; cannot restore.", "error");
+                return;
+            }
+
+            // Show confirmation dialog
+            var confirmWindow = new Windows.BackupConfirmationWindow(this,
+                Helpers.LocalizationHelper.GetString("RestoreBackupConfirmMessage"), true);
+            var result = confirmWindow.ShowDialog();
+            if (result != true || !confirmWindow.UserConfirmed)
+            {
                 return;
             }
 
@@ -630,14 +1039,14 @@ namespace IEVRModManager
                 // Quick read/write checks so we fail fast on permission issues
                 if (!CheckReadWriteAccess(gameDataPath, "game data folder"))
                 {
-                    MessageBox.Show("No se pudo escribir en la carpeta del juego. Revisa permisos (ej. ejecutar como administrador) o que la ruta no esté protegida.", "Error",
+                    MessageBox.Show("Could not write to the game folder. Check permissions (e.g., run as administrator) or ensure the path is not protected.", "Error",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
                 if (!CheckReadWriteAccess(tmpRoot, "temporary folder"))
                 {
-                    MessageBox.Show("No se pudo escribir en la carpeta temporal configurada. Revisa permisos o cambia la ruta en Configuración.", "Error",
+                    MessageBox.Show("Could not write to the configured temporary folder. Check permissions or change the path in Configuration.", "Error",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
@@ -679,6 +1088,16 @@ namespace IEVRModManager
                         // Show popup when no mods are selected
                         var successWindow = new SuccessMessageWindow(this, "Original game files restored.\nNo mods were active.");
                         successWindow.ShowDialog();
+
+                        _lastInstallManager.Save(new LastInstallInfo
+                        {
+                            GamePath = Path.GetFullPath(_config.GamePath),
+                            Files = new List<string>(),
+                            Mods = new List<string>(),
+                            AppliedAt = DateTime.UtcNow,
+                            SelectedCpkName = _config.SelectedCpkName ?? string.Empty,
+                            SelectedCpkInfo = GetCpkInfo(_config.CfgBinPath)
+                        });
                     }
                     catch (Exception ex)
                     {
@@ -755,7 +1174,18 @@ namespace IEVRModManager
             if (!ModsMatchLastInstall())
             {
                 var window = new PendingChangesWindow(this,
-                    "The currently selected mods do not match the last applied set. Apply changes to ensure you play with the selected mods. Do you want to continue anyway?");
+                    Helpers.LocalizationHelper.GetString("PendingChangesModsMessage"));
+                var result = window.ShowDialog();
+                if (result != true || !window.UserChoseContinue)
+                {
+                    return;
+                }
+            }
+
+            if (!VersionMatchesLastInstall())
+            {
+                var window = new PendingChangesWindow(this,
+                    Helpers.LocalizationHelper.GetString("PendingChangesVersionMessage"));
                 var result = window.ShowDialog();
                 if (result != true || !window.UserChoseContinue)
                 {
@@ -782,6 +1212,9 @@ namespace IEVRModManager
                     WorkingDirectory = _config.GamePath,
                     UseShellExecute = true
                 });
+                
+                // Minimize window after launching game (only if no alerts were shown)
+                WindowState = WindowState.Minimized;
             }
             catch (Exception ex)
             {
@@ -843,6 +1276,22 @@ namespace IEVRModManager
             }
 
             return true;
+        }
+
+        private bool VersionMatchesLastInstall()
+        {
+            var last = _lastInstallManager.Load();
+            if (!PathsMatch(last.GamePath, _config.GamePath))
+            {
+                // Different game path or never applied -> treat as mismatch so user is warned
+                return false;
+            }
+
+            var currentCpkName = _config.SelectedCpkName ?? string.Empty;
+            var currentCpkInfo = GetCpkInfo(_config.CfgBinPath);
+
+            return string.Equals(currentCpkName, last.SelectedCpkName, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(currentCpkInfo, last.SelectedCpkInfo, StringComparison.Ordinal);
         }
 
         private void CopyLog_Click(object sender, RoutedEventArgs e)
@@ -1102,7 +1551,9 @@ namespace IEVRModManager
                         GamePath = Path.GetFullPath(gamePath),
                         Files = mergedFiles,
                         Mods = modNames,
-                        AppliedAt = DateTime.UtcNow
+                        AppliedAt = DateTime.UtcNow,
+                        SelectedCpkName = _config.SelectedCpkName ?? string.Empty,
+                        SelectedCpkInfo = GetCpkInfo(_config.CfgBinPath)
                     });
 
                     Dispatcher.Invoke(() =>
@@ -1235,7 +1686,6 @@ namespace IEVRModManager
             if (sender is System.Windows.Controls.TextBlock textBlock)
             {
                 textBlock.TextDecorations = System.Windows.TextDecorations.Underline;
-                textBlock.FontSize = 13;
             }
         }
 
@@ -1244,7 +1694,6 @@ namespace IEVRModManager
             if (sender is System.Windows.Controls.TextBlock textBlock)
             {
                 textBlock.TextDecorations = null;
-                textBlock.FontSize = 12;
             }
         }
 
@@ -1263,6 +1712,17 @@ namespace IEVRModManager
             window.ShowDialog();
         }
 
+        public void LogMessage(string message, string level = "info")
+        {
+            Log(message, level);
+        }
+
+        private void OpenGameBananaBrowser_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new GameBananaBrowserWindow(this);
+            window.ShowDialog();
+        }
+
         private void Configuration_Click(object sender, RoutedEventArgs e)
         {
             // Create a copy of the configuration for the window
@@ -1273,6 +1733,8 @@ namespace IEVRModManager
                 SelectedCpkName = _config.SelectedCpkName,
                 ViolaCliPath = _config.ViolaCliPath,
                 TmpDir = _config.TmpDir,
+                Theme = _config.Theme,
+                Language = _config.Language,
                 Mods = _config.Mods
             };
             
@@ -1286,6 +1748,8 @@ namespace IEVRModManager
                     _config.CfgBinPath = configCopy.CfgBinPath;
                     _config.SelectedCpkName = configCopy.SelectedCpkName;
                     _config.ViolaCliPath = configCopy.ViolaCliPath;
+                    _config.Theme = configCopy.Theme;
+                    _config.Language = configCopy.Language;
                     SaveConfig();
                 },
                 RunCreateBackupFlowAsync,
@@ -1298,6 +1762,19 @@ namespace IEVRModManager
             _config.CfgBinPath = configCopy.CfgBinPath;
             _config.SelectedCpkName = configCopy.SelectedCpkName;
             _config.ViolaCliPath = configCopy.ViolaCliPath;
+            _config.Theme = configCopy.Theme;
+            
+            // Check if language changed
+            bool languageChanged = _config.Language != configCopy.Language;
+            _config.Language = configCopy.Language;
+            
+            // Apply language change if it changed
+            if (languageChanged)
+            {
+                LocalizationHelper.SetLanguage(_config.Language);
+                UpdateLocalizedTexts();
+            }
+            
             RefreshCpkOptions();
             SaveConfig();
         }
@@ -1341,6 +1818,328 @@ namespace IEVRModManager
                 LogTextBox.CaretIndex = LogTextBox.Text.Length;
                 LogTextBox.ScrollToEnd();
             });
+        }
+
+        private async Task DetectGameUpdateAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_config.GamePath) || !Directory.Exists(_config.GamePath))
+            {
+                return;
+            }
+
+            // During the fixed 12h window we do NOT check for updates
+            if (IsFallbackWindowActive())
+            {
+                return;
+            }
+
+            try
+            {
+                var latestBuildId = await GetLatestSteamBuildIdAsync();
+                var signature = await Task.Run(() => ComputeGameSignature(_config.GamePath));
+
+                var buildChanged = !string.IsNullOrWhiteSpace(latestBuildId) &&
+                    !string.Equals(latestBuildId, _config.LastKnownSteamBuildId, StringComparison.OrdinalIgnoreCase);
+                var signatureChanged = !string.IsNullOrWhiteSpace(signature) &&
+                    !string.Equals(signature, _config.LastKnownPacksSignature, StringComparison.Ordinal);
+
+                // Require BOTH: new Steam build AND changed packs signature
+                if (!buildChanged || !signatureChanged)
+                {
+                    return;
+                }
+
+                var cpkPath = Path.Combine(_config.GamePath, "data", "cpk_list.cfg.bin");
+                if (File.Exists(cpkPath))
+                {
+                    await BackupVanillaCpkAsync(cpkPath, latestBuildId);
+                }
+                else
+                {
+                    Log("Possible game update detected, but data/cpk_list.cfg.bin was not found.", "error");
+                }
+
+                if (!string.IsNullOrWhiteSpace(latestBuildId))
+                {
+                    _config.LastKnownSteamBuildId = latestBuildId;
+                }
+
+                _config.LastKnownPacksSignature = signature;
+                SaveConfig();
+            }
+            catch (Exception ex)
+            {
+                Log($"Could not check for game updates: {ex.Message}", "error");
+            }
+        }
+
+        private void StartUpdateCheckTimer()
+        {
+            _updateCheckTimer?.Stop();
+            _updateCheckTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMinutes(10)
+            };
+
+            // Run once at startup (when the timer is created)
+            _ = RunGuardedUpdateCheckAsync();
+
+            _updateCheckTimer.Tick += async (_, _) =>
+            {
+                await RunGuardedUpdateCheckAsync();
+            };
+
+            _updateCheckTimer.Start();
+        }
+
+        private async Task RunGuardedUpdateCheckAsync()
+        {
+            if (_isCheckingUpdates)
+            {
+                return;
+            }
+
+            _isCheckingUpdates = true;
+            try
+            {
+                await DetectGameUpdateAsync();
+            }
+            finally
+            {
+                _isCheckingUpdates = false;
+            }
+        }
+
+        private async Task<string?> GetLatestSteamBuildIdAsync()
+        {
+            try
+            {
+                const string rssUrl = "https://steamdb.info/api/PatchnotesRSS/?appid=2799860";
+                using var response = await _httpClient.GetAsync(rssUrl);
+                response.EnsureSuccessStatusCode();
+                await using var stream = await response.Content.ReadAsStreamAsync();
+                var doc = XDocument.Load(stream);
+                var item = doc.Descendants("item").FirstOrDefault();
+                if (item == null)
+                {
+                    return null;
+                }
+
+                var guid = item.Element("guid")?.Value?.Trim();
+                if (!string.IsNullOrWhiteSpace(guid))
+                {
+                    return guid;
+                }
+
+                var title = item.Element("title")?.Value?.Trim();
+                return string.IsNullOrWhiteSpace(title) ? null : title;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"SteamDB RSS fetch failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        private async Task BackupVanillaCpkAsync(string cpkPath, string? latestBuildId)
+        {
+            try
+            {
+                var targetDir = Config.SharedStorageCpkDir;
+                Directory.CreateDirectory(targetDir);
+
+                MigrateLegacyVanillaName(targetDir);
+
+                var latestName = "LatestCpkList.cfg.bin";
+                var targetPath = Path.Combine(targetDir, latestName);
+
+                var useFallback = IsFallbackWindowActive() && TryCopyFallbackVanilla(targetPath);
+                if (!useFallback)
+                {
+                    File.Copy(cpkPath, targetPath, true);
+                }
+
+                var sourceLabel = useFallback ? "bundled 1_4_2 cpk_list" : "game data/cpk_list.cfg.bin";
+                Log($"Detected game update{(string.IsNullOrWhiteSpace(latestBuildId) ? string.Empty : $" ({latestBuildId})")}. Copied {sourceLabel} to {latestName}.", "success");
+                RefreshCpkOptions();
+            }
+            catch (Exception ex)
+            {
+                Log($"Could not copy the updated cpk_list.cfg.bin: {ex.Message}", "error");
+            }
+        }
+
+        private async Task EnsureInitialVanillaSeedAsync()
+        {
+            if (_vanillaSeedAttempted)
+            {
+                return;
+            }
+
+            _vanillaSeedAttempted = true;
+
+            if (!IsFallbackWindowActive())
+            {
+                return;
+            }
+
+            var targetDir = Config.SharedStorageCpkDir;
+            Directory.CreateDirectory(targetDir);
+            MigrateLegacyVanillaName(targetDir);
+            var targetPath = Path.Combine(targetDir, "LatestCpkList.cfg.bin");
+
+            var source = ResolveDownloaded142Cpk() ?? ResolveBundled142Cpk();
+            if (string.IsNullOrWhiteSpace(source))
+            {
+                Log("Could not find 1_4_2_cpk_list.cfg.bin to seed Latest. It will be created from the game when available.", "error");
+                return;
+            }
+
+            try
+            {
+                File.Copy(source, targetPath, true);
+                RefreshCpkOptions();
+                Log("Seeded LatestCpkList.cfg.bin from 1_4_2_cpk_list.cfg.bin for the next 12 hours.", "success");
+            }
+            catch (Exception ex)
+            {
+                Log($"Could not seed LatestCpkList.cfg.bin from 1_4_2: {ex.Message}", "error");
+            }
+        }
+
+        private void MigrateLegacyVanillaName(string targetDir)
+        {
+            try
+            {
+                var legacyPath = Path.Combine(targetDir, "VanillaCpkList.cfg.bin");
+                var latestPath = Path.Combine(targetDir, "LatestCpkList.cfg.bin");
+
+                if (File.Exists(legacyPath))
+                {
+                    if (File.Exists(latestPath))
+                    {
+                        File.Delete(latestPath);
+                    }
+                    File.Move(legacyPath, latestPath);
+                    Log("Renamed VanillaCpkList.cfg.bin to LatestCpkList.cfg.bin.", "info");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Could not rename VanillaCpkList.cfg.bin: {ex.Message}", "error");
+            }
+        }
+
+        private string? ResolveBundled142Cpk()
+        {
+            try
+            {
+                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                var bundled = Path.Combine(baseDir, "cpk_list", "1_4_2_cpk_list.cfg.bin");
+                return File.Exists(bundled) ? bundled : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private string? ResolveDownloaded142Cpk()
+        {
+            try
+            {
+                var storageDir = Config.SharedStorageCpkDir;
+                Directory.CreateDirectory(storageDir);
+
+                var exact = Path.Combine(storageDir, "1_4_2_cpk_list.cfg.bin");
+                if (File.Exists(exact))
+                {
+                    return exact;
+                }
+
+                var candidates = Directory.GetFiles(storageDir, "*1_4_2*.cfg.bin", SearchOption.TopDirectoryOnly)
+                    .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                return candidates.FirstOrDefault();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private bool TryCopyFallbackVanilla(string targetPath)
+        {
+            try
+            {
+                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                var fallbackPath = Path.Combine(baseDir, "cpk_list", "1_4_2_cpk_list.cfg.bin");
+                if (!File.Exists(fallbackPath))
+                {
+                    return false;
+                }
+
+                File.Copy(fallbackPath, targetPath, true);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Fallback vanilla copy failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static string ComputeGameSignature(string gamePath)
+        {
+            // Only rely on data/packs contents to avoid false positives
+            return ComputePacksSignature(gamePath);
+        }
+
+        private static bool IsFallbackWindowActive()
+        {
+            return DateTime.UtcNow < VanillaFallbackCutoffUtc;
+        }
+
+        private static string GetCpkInfo(string? cpkPath)
+        {
+            if (string.IsNullOrWhiteSpace(cpkPath) || !File.Exists(cpkPath))
+            {
+                return "missing";
+            }
+
+            var info = new FileInfo(cpkPath);
+            return $"{info.Length}:{info.LastWriteTimeUtc.Ticks}";
+        }
+
+        private static string ComputePacksSignature(string gamePath)
+        {
+            var packsPath = Path.Combine(gamePath, "data", "packs");
+            if (!Directory.Exists(packsPath))
+            {
+                return string.Empty;
+            }
+
+            var files = Directory.GetFiles(packsPath, "*", SearchOption.AllDirectories);
+            if (files.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+
+            using var sha = SHA256.Create();
+            foreach (var file in files)
+            {
+                var info = new FileInfo(file);
+                var relative = Path.GetRelativePath(packsPath, file).Replace('\\', '/');
+                var line = $"{relative}|{info.Length}|{info.LastWriteTimeUtc.Ticks}\n";
+                var bytes = Encoding.UTF8.GetBytes(line);
+                sha.TransformBlock(bytes, 0, bytes.Length, null, 0);
+            }
+
+            sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+            return Convert.ToHexString(sha.Hash ?? Array.Empty<byte>());
         }
 
         private void CleanupTempDir()
@@ -1440,11 +2239,18 @@ namespace IEVRModManager
             get
             {
                 var name = Path.GetFileName(FileName);
-                if (name.EndsWith(".cfg.bin", StringComparison.OrdinalIgnoreCase))
+                var baseName = name.EndsWith(".cfg.bin", StringComparison.OrdinalIgnoreCase)
+                    ? name[..^8]
+                    : Path.GetFileNameWithoutExtension(name);
+
+                const string suffix = "_cpk_list";
+                if (baseName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 {
-                    return name[..^8];
+                    baseName = baseName[..^suffix.Length];
                 }
-                return Path.GetFileNameWithoutExtension(name);
+
+                var formatted = baseName.Replace('_', '.');
+                return string.IsNullOrWhiteSpace(formatted) ? baseName : formatted;
             }
         }
     }

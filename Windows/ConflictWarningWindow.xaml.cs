@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
+using IEVRModManager.Helpers;
 
 namespace IEVRModManager.Windows
 {
@@ -13,6 +14,15 @@ namespace IEVRModManager.Windows
         {
             InitializeComponent();
             Owner = parent;
+
+            // Update localized texts
+            Title = LocalizationHelper.GetString("FileConflictsDetected");
+            TitleText.Text = LocalizationHelper.GetString("FileConflictsDetected");
+            WarningMessage1.Text = LocalizationHelper.GetString("ConflictWarningMessage1");
+            WarningMessage2.Text = LocalizationHelper.GetString("ConflictWarningMessage2");
+            WarningMessage3.Text = LocalizationHelper.GetString("ConflictWarningMessage3");
+            CancelButton.Content = LocalizationHelper.GetString("Cancel");
+            ContinueButton.Content = LocalizationHelper.GetString("Continue");
 
             // Create a list of anonymous objects to display in the ItemsControl
             var conflictItems = conflicts.Select(kvp => new

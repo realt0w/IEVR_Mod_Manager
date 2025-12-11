@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Windows;
+using Microsoft.Win32;
 
 namespace IEVRModManager
 {
@@ -16,9 +17,105 @@ namespace IEVRModManager
         protected override void OnStartup(StartupEventArgs e)
         {
             EnsureBaseDirectory();
+            ApplyLanguage();
+            ApplyTheme();
             StartupLog.Log("App starting.");
             base.OnStartup(e);
         }
+
+        private void ApplyLanguage()
+        {
+            try
+            {
+                // Load config to get language preference
+                var configManager = new Managers.ConfigManager();
+                var config = configManager.Load();
+                string language = string.IsNullOrWhiteSpace(config.Language) ? "System" : config.Language;
+                StartupLog.Log($"Applying language: {language}");
+                Helpers.LocalizationHelper.SetLanguage(language);
+                
+                // Test that strings are loading
+                var testString = Helpers.LocalizationHelper.GetString("AppTitle");
+                StartupLog.Log($"Test string 'AppTitle' = '{testString}'");
+            }
+            catch (Exception ex)
+            {
+                StartupLog.Log("Error applying language", ex);
+            }
+        }
+
+        private void ApplyTheme()
+        {
+            try
+            {
+                // Load config to get theme preference
+                var configManager = new Managers.ConfigManager();
+                var config = configManager.Load();
+                string theme = string.IsNullOrWhiteSpace(config.Theme) ? "System" : config.Theme;
+
+                // Determine which theme to use
+                string themeToUse;
+                if (theme == "System")
+                {
+                    // Detect system theme
+                    themeToUse = IsSystemThemeDark() ? "Dark" : "Light";
+                }
+                else
+                {
+                    themeToUse = theme;
+                }
+
+                // Apply theme
+                var resources = Current.Resources;
+                resources.MergedDictionaries.Clear();
+
+                var themeDict = new ResourceDictionary();
+                if (themeToUse == "Light")
+                {
+                    themeDict.Source = new Uri("Themes/LightTheme.xaml", UriKind.Relative);
+                }
+                else
+                {
+                    themeDict.Source = new Uri("Themes/DarkTheme.xaml", UriKind.Relative);
+                }
+                resources.MergedDictionaries.Add(themeDict);
+            }
+            catch (Exception ex)
+            {
+                StartupLog.Log("Error applying theme", ex);
+                // Fallback to dark theme
+                var resources = Current.Resources;
+                resources.MergedDictionaries.Clear();
+                var themeDict = new ResourceDictionary();
+                themeDict.Source = new Uri("Themes/DarkTheme.xaml", UriKind.Relative);
+                resources.MergedDictionaries.Add(themeDict);
+            }
+        }
+
+        private bool IsSystemThemeDark()
+        {
+            try
+            {
+                // Check Windows registry for theme preference
+                using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
+                {
+                    if (key != null)
+                    {
+                        var appsUseLightTheme = key.GetValue("AppsUseLightTheme");
+                        if (appsUseLightTheme != null && appsUseLightTheme is int value)
+                        {
+                            return value == 0; // 0 = dark theme, 1 = light theme
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // If registry access fails, default to dark theme
+            }
+            return true; // Default to dark theme
+        }
+
 
         private static void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
