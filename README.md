@@ -15,6 +15,8 @@ A mod manager for **Inazuma Eleven Victory Road**.
   - [First Time Setup](#first-time-setup)
   - [Using the Mod Manager](#using-the-mod-manager)
   - [Applying Mods](#applying-mods)
+  - [Mod Profiles](#mod-profiles)
+  - [Customization](#customization)
   - [Troubleshooting](#troubleshooting)
 - [For Mod Developers](#for-mod-developers)
   - [Mod Structure](#mod-structure)
@@ -57,7 +59,10 @@ The app stores its data in `%AppData%\.ievrModManager\` (configuration, mods, te
    - The app auto-detects it; if there are multiple `.exe` files you will be asked to keep only one.
 4. Mods folder location:
    - Mods are loaded from `%AppData%\.ievrModManager\Mods`. Use **Open Mods Folder** to go directly to that directory.
-5. Settings are saved automatically. Use **Downloads** for quick links to Viola, cpk_list, and GameBanana.
+5. (Optional) Customize appearance:
+   - Set your preferred **Theme** (System/Dark/Light) and **Language** (System/English/Español) in Configuration
+   - Changes require an application restart
+6. Settings are saved automatically. Use **Downloads** for quick links to Viola, cpk_list, and GameBanana.
 
 ### Using the Mod Manager
 
@@ -74,10 +79,13 @@ The main window shows all mods found in `%AppData%\.ievrModManager\Mods` (top = 
 - **Move Up/Down**: Change mod priority (higher overrides lower on conflicts)
 - **Enable All / Disable All**: Quickly toggle every mod
 - **Open Mods Folder**: Opens the Mods directory in Explorer
+- **Browse Mods**: Opens the GameBanana browser to discover and download mods directly
 - **cpk selector + Download cpk_list**: Pick which `cpk_list.cfg.bin` to use and download missing files directly into the shared storage
+- **Mod Profiles**: Save and quickly switch between different mod configurations (see [Mod Profiles](#mod-profiles))
 
 **Installing Mods:**
 1. Download a mod from a trusted source (e.g., [GameBanana](https://gamebanana.com/mods/games/20069))
+   - Use the **Browse Mods** button to open the integrated GameBanana browser
 2. Extract the mod folder to `%AppData%\.ievrModManager\Mods` (use **Open Mods Folder**)
    - **Important:** Folder structure must be `ModFolderName/data/` (the `data` folder directly inside the mod folder)
    - If the archive has `ModFolderName/ModFolderName/data/`, move the inner folder up one level
@@ -89,6 +97,7 @@ The main window shows all mods found in `%AppData%\.ievrModManager\Mods` (top = 
 2. Choose the `cpk_list.cfg.bin` from the dropdown (fetched from the shared `cpk` folder).
 3. Click **Apply Changes**.
 4. The app will:
+   - Ask for confirmation before creating or restoring backups
    - Warn you about `data/packs` edits and file conflicts so you can cancel if needed
    - Use the selected `cpk_list.cfg.bin` and the Viola executable from shared storage
    - Merge mods, copy results into the game `data` folder, and remove leftover files from the previous install
@@ -98,6 +107,53 @@ The main window shows all mods found in `%AppData%\.ievrModManager\Mods` (top = 
 **Notes:**
 - Always close the game before applying mods
 - Duration depends on the number and size of mods
+- The app will automatically minimize when launching the game (if no pending changes alerts are shown)
+
+### Mod Profiles
+
+Mod Profiles allow you to save and quickly switch between different mod configurations. This is useful when you want to:
+- Switch between different gameplay setups (e.g., competitive vs. casual)
+- Test different mod combinations
+- Quickly restore a previous working configuration
+
+**Using Mod Profiles:**
+
+1. **Create a Profile:**
+   - Configure your mods (enable/disable, set priority, select CPK version)
+   - Click the **Profile** dropdown and select **Manage Profiles**
+   - Enter a profile name and click **Save**
+
+2. **Load a Profile:**
+   - Select a profile from the **Profile** dropdown
+   - The app will automatically apply the saved mod configuration and CPK selection
+
+3. **Manage Profiles:**
+   - Click **Manage Profiles** to open the profile manager
+   - Load, save, or delete profiles as needed
+   - The last applied profile is automatically loaded when you restart the app
+
+**Profile Features:**
+- Saves enabled/disabled state for all mods
+- Saves mod priority order
+- Saves selected CPK version
+- Automatically restores the last applied profile on startup
+
+### Customization
+
+**Theme Selection:**
+- Open **Configuration** and select your preferred theme:
+  - **System**: Follows your Windows theme (light/dark)
+  - **Dark**: Always use dark theme
+  - **Light**: Always use light theme
+- Theme changes require an application restart to take effect
+
+**Language Selection:**
+- Open **Configuration** and select your preferred language:
+  - **System**: Uses your Windows language settings
+  - **English**: English interface
+  - **Español**: Spanish interface
+- Language changes require an application restart to take effect
+- Additional languages can be added by creating new YAML files in the `Resources` folder
 
 ### Troubleshooting
 
@@ -252,6 +308,7 @@ dotnet run
 - **WPF (Windows Presentation Foundation)** - Graphical interface
 - **C#** - Programming language
 - **System.Text.Json** - JSON serialization
+- **YamlDotNet** - YAML parsing for localization
 - **System.IO** - File operations
 
 ### Development Notes
@@ -259,9 +316,11 @@ dotnet run
 - Project uses **nullable reference types** (`nullable enable`)
 - App data root: `%AppData%\.ievrModManager\`
   - `config.json`, `last_install.json`
-  - `Mods/` (user mods), `tmp/` (merge workspace), `storage/cpk` (cpk_list), `storage/viola` (Viola executable)
+  - `Mods/` (user mods), `tmp/` (merge workspace), `storage/cpk` (cpk_list), `storage/viola` (Viola executable), `Profiles/` (mod profiles)
 - Default mods directory is `%AppData%\.ievrModManager\Mods`
 - `config.json` format remains compatible with previous versions
+- Localization files are stored as YAML files in `Resources/` directory (e.g., `Strings.yaml`, `Strings.es-ES.yaml`)
+- Themes are defined in `Themes/` directory (`DarkTheme.xaml`, `LightTheme.xaml`)
 
 ---
 
