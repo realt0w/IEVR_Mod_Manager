@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using YamlDotNet.Serialization;
 
@@ -28,7 +29,7 @@ namespace IEVRModManager.Helpers
                 
                 try
                 {
-                    // Get the base directory (works for both development and published apps, including single-file)
+                    // First, try to load from file system (for development and non-single-file apps)
                     var baseDir = AppContext.BaseDirectory;
                     var resourcesDir = Path.Combine(baseDir, "Resources");
                     
@@ -49,30 +50,54 @@ namespace IEVRModManager.Helpers
                     System.Diagnostics.Debug.WriteLine($"[Localization] Using resources directory: {resourcesDir}");
                     System.Diagnostics.Debug.WriteLine($"[Localization] Directory exists: {Directory.Exists(resourcesDir)}");
 
-                    // Load default English strings
+                    bool loadedFromFiles = false;
+
+                    // Try to load from file system first
                     var defaultPath = Path.Combine(resourcesDir, "Strings.yaml");
-                    System.Diagnostics.Debug.WriteLine($"[Localization] Loading English from: {defaultPath}");
-                    System.Diagnostics.Debug.WriteLine($"[Localization] File exists: {File.Exists(defaultPath)}");
+                    var spanishPath = Path.Combine(resourcesDir, "Strings.es-ES.yaml");
+                    
                     if (File.Exists(defaultPath))
                     {
+                        System.Diagnostics.Debug.WriteLine($"[Localization] Loading English from file: {defaultPath}");
                         _allStrings["en-US"] = LoadYamlFile(defaultPath);
-                        System.Diagnostics.Debug.WriteLine($"[Localization] Loaded {_allStrings["en-US"].Count} English strings");
+                        System.Diagnostics.Debug.WriteLine($"[Localization] Loaded {_allStrings["en-US"].Count} English strings from file");
+                        loadedFromFiles = true;
                     }
 
-                    // Load Spanish strings
-                    var spanishPath = Path.Combine(resourcesDir, "Strings.es-ES.yaml");
-                    System.Diagnostics.Debug.WriteLine($"[Localization] Loading Spanish from: {spanishPath}");
-                    System.Diagnostics.Debug.WriteLine($"[Localization] File exists: {File.Exists(spanishPath)}");
                     if (File.Exists(spanishPath))
                     {
+                        System.Diagnostics.Debug.WriteLine($"[Localization] Loading Spanish from file: {spanishPath}");
                         _allStrings["es-ES"] = LoadYamlFile(spanishPath);
-                        System.Diagnostics.Debug.WriteLine($"[Localization] Loaded {_allStrings["es-ES"].Count} Spanish strings");
+                        System.Diagnostics.Debug.WriteLine($"[Localization] Loaded {_allStrings["es-ES"].Count} Spanish strings from file");
+                        loadedFromFiles = true;
                     }
 
-                    // If no files found, create default empty dictionary
+                    // If files not found, try loading from embedded resources (for single-file apps)
+                    if (!loadedFromFiles)
+                    {
+                        System.Diagnostics.Debug.WriteLine("[Localization] Files not found in file system, trying embedded resources...");
+                        
+                        // Load English from embedded resource
+                        var englishResource = LoadYamlFromEmbeddedResource("IEVRModManager.Resources.Strings.yaml");
+                        if (englishResource != null && englishResource.Count > 0)
+                        {
+                            _allStrings["en-US"] = englishResource;
+                            System.Diagnostics.Debug.WriteLine($"[Localization] Loaded {englishResource.Count} English strings from embedded resource");
+                        }
+
+                        // Load Spanish from embedded resource
+                        var spanishResource = LoadYamlFromEmbeddedResource("IEVRModManager.Resources.Strings.es-ES.yaml");
+                        if (spanishResource != null && spanishResource.Count > 0)
+                        {
+                            _allStrings["es-ES"] = spanishResource;
+                            System.Diagnostics.Debug.WriteLine($"[Localization] Loaded {spanishResource.Count} Spanish strings from embedded resource");
+                        }
+                    }
+
+                    // If still no strings loaded, create default empty dictionary
                     if (_allStrings.Count == 0)
                     {
-                        System.Diagnostics.Debug.WriteLine("[Localization] WARNING: No localization files found!");
+                        System.Diagnostics.Debug.WriteLine("[Localization] WARNING: No localization files found in file system or embedded resources!");
                         _allStrings["en-US"] = new Dictionary<string, string>();
                     }
                 }
@@ -82,6 +107,97 @@ namespace IEVRModManager.Helpers
                     System.Diagnostics.Debug.WriteLine($"[Localization] Stack trace: {ex.StackTrace}");
                     _allStrings["en-US"] = new Dictionary<string, string>();
                 }
+            }
+        }
+
+        private static Dictionary<string, string>? LoadYamlFromEmbeddedResource(string resourceName)
+        {
+            try
+            {
+                var assembly = Assembly.GetExecutingAssembly();
+                
+                // First, try the exact resource name
+                using (var stream = assembly.GetManifestResourceStream(resourceName))
+                {
+                    if (stream != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Localization] Found embedded resource: {resourceName}");
+                        return LoadYamlFromStream(stream);
+                    }
+                }
+
+                // If not found, try alternative resource names
+                System.Diagnostics.Debug.WriteLine($"[Localization] Embedded resource '{resourceName}' not found, trying alternatives...");
+                var alternativeNames = new[]
+                {
+                    resourceName.Replace("IEVRModManager.", ""),
+                    resourceName.Replace("IEVRModManager.Resources.", "Resources."),
+                    resourceName.Replace("IEVRModManager.Resources.", ""),
+                    resourceName.Replace("IEVRModManager.", "IEVRModManager.Resources.")
+                };
+                
+                foreach (var altName in alternativeNames)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Localization] Trying alternative resource name: {altName}");
+                    using (var altStream = assembly.GetManifestResourceStream(altName))
+                    {
+                        if (altStream != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[Localization] Found resource with alternative name: {altName}");
+                            return LoadYamlFromStream(altStream);
+                        }
+                    }
+                }
+                
+                // If still not found, search all resources for matching file names
+                var allResources = assembly.GetManifestResourceNames();
+                System.Diagnostics.Debug.WriteLine($"[Localization] Searching through {allResources.Length} embedded resources...");
+                
+                var fileName = Path.GetFileName(resourceName);
+                foreach (var resName in allResources)
+                {
+                    if (resName.EndsWith(fileName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Localization] Found matching resource by filename: {resName}");
+                        using (var foundStream = assembly.GetManifestResourceStream(resName))
+                        {
+                            if (foundStream != null)
+                            {
+                                return LoadYamlFromStream(foundStream);
+                            }
+                        }
+                    }
+                }
+                
+                // List all available resources for debugging
+                System.Diagnostics.Debug.WriteLine($"[Localization] Available embedded resources: {string.Join(", ", allResources)}");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Localization] Error loading embedded resource '{resourceName}': {ex.Message}");
+                return null;
+            }
+        }
+
+        private static Dictionary<string, string> LoadYamlFromStream(Stream stream)
+        {
+            try
+            {
+                using (var reader = new StreamReader(stream))
+                {
+                    var yamlContent = reader.ReadToEnd();
+                    var deserializer = new DeserializerBuilder()
+                        .Build();
+                    
+                    var yamlDict = deserializer.Deserialize<Dictionary<string, string>>(yamlContent);
+                    return yamlDict ?? new Dictionary<string, string>();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error loading YAML from stream: {ex.Message}");
+                return new Dictionary<string, string>();
             }
         }
 

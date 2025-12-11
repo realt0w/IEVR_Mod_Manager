@@ -24,6 +24,9 @@
     <None Update="logo.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <EmbeddedResource Include="Resources\Strings.yaml" />
+    <EmbeddedResource Include="Resources\Strings.es-ES.yaml" />
+    <!-- Also copy to output for development -->
     <None Update="Resources\Strings.yaml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
