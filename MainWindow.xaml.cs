@@ -224,7 +224,38 @@ namespace IEVRModManager
                 if (ManageProfilesButton != null)
                     ManageProfilesButton.Content = LocalizationHelper.GetString("ManageProfiles");
                 if (CheckForUpdatesButton != null)
-                    CheckForUpdatesButton.Content = LocalizationHelper.GetString("CheckForUpdates");
+                {
+                    var stackPanel = new System.Windows.Controls.StackPanel
+                    {
+                        Orientation = System.Windows.Controls.Orientation.Horizontal,
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+                    };
+                    
+                    var iconPath = new System.Windows.Shapes.Path
+                    {
+                        Data = System.Windows.Media.Geometry.Parse("M12,4V1L8,5L12,9V6C15.31,6 18,8.69 18,12C18,15.31 15.31,18 12,18C8.69,18 6,15.31 6,12H4C4,16.42 7.58,20 12,20C16.42,20 20,16.42 20,12C20,7.58 16.42,4 12,4Z"),
+                        Width = 16,
+                        Height = 16,
+                        Stretch = System.Windows.Media.Stretch.Uniform,
+                        Margin = new System.Windows.Thickness(0, 0, 6, 0),
+                        VerticalAlignment = System.Windows.VerticalAlignment.Center
+                    };
+                    iconPath.SetBinding(System.Windows.Shapes.Shape.FillProperty, 
+                        new System.Windows.Data.Binding("Foreground") 
+                        { 
+                            RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(System.Windows.Controls.Button), 1) 
+                        });
+                    
+                    var textBlock = new System.Windows.Controls.TextBlock
+                    {
+                        Text = LocalizationHelper.GetString("CheckForUpdates"),
+                        VerticalAlignment = System.Windows.VerticalAlignment.Center
+                    };
+                    
+                    stackPanel.Children.Add(iconPath);
+                    stackPanel.Children.Add(textBlock);
+                    CheckForUpdatesButton.Content = stackPanel;
+                }
                 
                 System.Diagnostics.Debug.WriteLine("[Localization] Finished updating localized texts");
             }
