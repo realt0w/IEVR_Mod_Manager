@@ -51,17 +51,17 @@ namespace IEVRModManager.Managers
             }
             catch (JsonException ex)
             {
-                Instance.Log(LogLevel.Warning, "Error parsing last install info JSON", ex);
+                Instance.Log(LogLevel.Warning, "Error parsing last install info JSON", true, ex);
                 return LastInstallInfo.Empty();
             }
             catch (IOException ex)
             {
-                Instance.Log(LogLevel.Warning, "IO error loading last install info", ex);
+                Instance.Log(LogLevel.Warning, "IO error loading last install info", true, ex);
                 return LastInstallInfo.Empty();
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Warning, "Unexpected error loading last install info", ex);
+                Instance.Log(LogLevel.Warning, "Unexpected error loading last install info", true, ex);
                 return LastInstallInfo.Empty();
             }
         }
@@ -95,17 +95,17 @@ namespace IEVRModManager.Managers
             }
             catch (IOException ex)
             {
-                Instance.Log(LogLevel.Error, "IO error saving last install info", ex);
+                Instance.Log(LogLevel.Error, "IO error saving last install info", true, ex);
                 throw new ModManagerException("Failed to save last install info. Check file permissions.", ex);
             }
             catch (UnauthorizedAccessException ex)
             {
-                Instance.Log(LogLevel.Error, "Access denied saving last install info", ex);
+                Instance.Log(LogLevel.Error, "Access denied saving last install info", true, ex);
                 throw new ModManagerException("Access denied to last install info file.", ex);
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Error, "Unexpected error saving last install info", ex);
+                Instance.Log(LogLevel.Error, "Unexpected error saving last install info", true, ex);
                 throw new ModManagerException("An unexpected error occurred while saving last install info.", ex);
             }
         }
@@ -126,7 +126,7 @@ namespace IEVRModManager.Managers
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Warning, "Error deleting last install info", ex);
+                Instance.Log(LogLevel.Warning, "Error deleting last install info", true, ex);
             }
         }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -49,7 +50,7 @@ namespace IEVRModManager.Helpers
         private LogLevel _minimumLevel;
         private bool _writeToFile;
         private bool _writeToDebug;
-        private Action<string, LogLevel>? _uiCallback;
+        private Action<string, LogLevel, bool>? _uiCallback;
         private bool _isDisposed;
         private readonly CancellationTokenSource _cancellationTokenSource;
         private readonly Task _writerTask;
@@ -120,10 +121,10 @@ namespace IEVRModManager.Helpers
         }
 
         /// <summary>
-        /// Sets a callback for UI logging. The callback receives the formatted message and log level.
+        /// Sets a callback for UI logging. The callback receives the formatted message, log level, and whether it's a technical log.
         /// </summary>
         /// <param name="callback">The callback function, or null to disable UI logging.</param>
-        public void SetUICallback(Action<string, LogLevel>? callback)
+        public void SetUICallback(Action<string, LogLevel, bool>? callback)
         {
             _uiCallback = callback;
         }
@@ -134,7 +135,17 @@ namespace IEVRModManager.Helpers
         /// <param name="message">The message to log.</param>
         public void Debug(string message)
         {
-            Log(LogLevel.Debug, message);
+            Log(LogLevel.Debug, message, false);
+        }
+
+        /// <summary>
+        /// Logs a debug message with technical flag.
+        /// </summary>
+        /// <param name="message">The message to log.</param>
+        /// <param name="isTechnical">Whether this is a technical log entry.</param>
+        public void Debug(string message, bool isTechnical)
+        {
+            Log(LogLevel.Debug, message, isTechnical);
         }
 
         /// <summary>
@@ -143,7 +154,17 @@ namespace IEVRModManager.Helpers
         /// <param name="message">The message to log.</param>
         public void Info(string message)
         {
-            Log(LogLevel.Info, message);
+            Log(LogLevel.Info, message, false);
+        }
+
+        /// <summary>
+        /// Logs an informational message with technical flag.
+        /// </summary>
+        /// <param name="message">The message to log.</param>
+        /// <param name="isTechnical">Whether this is a technical log entry.</param>
+        public void Info(string message, bool isTechnical)
+        {
+            Log(LogLevel.Info, message, isTechnical);
         }
 
         /// <summary>
@@ -152,7 +173,17 @@ namespace IEVRModManager.Helpers
         /// <param name="message">The message to log.</param>
         public void Warning(string message)
         {
-            Log(LogLevel.Warning, message);
+            Log(LogLevel.Warning, message, false);
+        }
+
+        /// <summary>
+        /// Logs a warning message with technical flag.
+        /// </summary>
+        /// <param name="message">The message to log.</param>
+        /// <param name="isTechnical">Whether this is a technical log entry.</param>
+        public void Warning(string message, bool isTechnical)
+        {
+            Log(LogLevel.Warning, message, isTechnical);
         }
 
         /// <summary>
@@ -161,7 +192,17 @@ namespace IEVRModManager.Helpers
         /// <param name="message">The message to log.</param>
         public void Error(string message)
         {
-            Log(LogLevel.Error, message);
+            Log(LogLevel.Error, message, false);
+        }
+
+        /// <summary>
+        /// Logs an error message with technical flag.
+        /// </summary>
+        /// <param name="message">The message to log.</param>
+        /// <param name="isTechnical">Whether this is a technical log entry.</param>
+        public void Error(string message, bool isTechnical)
+        {
+            Log(LogLevel.Error, message, isTechnical);
         }
 
         /// <summary>
@@ -171,6 +212,18 @@ namespace IEVRModManager.Helpers
         /// <param name="message">The message to log.</param>
         /// <param name="exception">The exception to log.</param>
         public void Log(LogLevel level, string message, Exception? exception)
+        {
+            Log(level, message, false, exception);
+        }
+
+        /// <summary>
+        /// Logs a message with an exception and technical flag.
+        /// </summary>
+        /// <param name="level">The log level.</param>
+        /// <param name="message">The message to log.</param>
+        /// <param name="isTechnical">Whether this is a technical log entry.</param>
+        /// <param name="exception">The exception to log.</param>
+        public void Log(LogLevel level, string message, bool isTechnical, Exception? exception = null)
         {
             if (level < _minimumLevel)
             {
@@ -182,13 +235,14 @@ namespace IEVRModManager.Helpers
                 Timestamp = DateTime.Now,
                 Level = level,
                 Message = message,
-                Exception = exception
+                Exception = exception,
+                IsTechnical = isTechnical
             };
 
             _logQueue.Enqueue(entry);
 
             // Immediate UI callback (synchronous for UI thread)
-            _uiCallback?.Invoke(FormatMessage(entry), level);
+            _uiCallback?.Invoke(FormatMessage(entry), level, isTechnical);
         }
 
         /// <summary>
@@ -198,7 +252,7 @@ namespace IEVRModManager.Helpers
         /// <param name="message">The message to log.</param>
         public void Log(LogLevel level, string message)
         {
-            Log(level, message, null);
+            Log(level, message, false);
         }
 
         private void ProcessLogQueue(CancellationToken cancellationToken)
@@ -274,13 +328,62 @@ namespace IEVRModManager.Helpers
         private string FormatMessage(LogEntry entry)
         {
             var timestamp = entry.Timestamp.ToString("HH:mm:ss");
-            return $"[{timestamp}] {entry.Message}";
+            var message = NormalizeMessage(entry.Message);
+            return $"[{timestamp}] {message}";
         }
 
         private string FormatMessage(LogEntry entry, LogLevel level)
         {
             var timestamp = entry.Timestamp.ToString("HH:mm:ss");
-            return $"[{timestamp}] {entry.Message}";
+            var message = NormalizeMessage(entry.Message);
+            return $"[{timestamp}] {message}";
+        }
+
+        /// <summary>
+        /// Normalizes a log message to ensure visual consistency.
+        /// Removes trailing periods, ensures consistent capitalization, and trims whitespace.
+        /// </summary>
+        private string NormalizeMessage(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return message;
+            }
+
+            // Trim whitespace
+            message = message.Trim();
+
+            // Remove trailing periods unless they're part of an ellipsis
+            if (message.EndsWith(".") && !message.EndsWith("...") && message.Length > 1)
+            {
+                // Check if it's likely an abbreviation (like "etc." or "e.g.")
+                var words = message.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                if (words.Length > 0)
+                {
+                    var lastWord = words[words.Length - 1];
+                    // Keep period if it's a common abbreviation
+                    var commonAbbreviations = new[] { "etc.", "e.g.", "i.e.", "vs.", "Dr.", "Mr.", "Ms.", "Prof." };
+                    if (!commonAbbreviations.Contains(lastWord, StringComparer.OrdinalIgnoreCase))
+                    {
+                        // Remove trailing period
+                        message = message.Substring(0, message.Length - 1);
+                    }
+                }
+                else
+                {
+                    // Remove trailing period
+                    message = message.Substring(0, message.Length - 1);
+                }
+            }
+
+            // Ensure first character is uppercase (unless it's a special character, number, or bracket)
+            if (message.Length > 0 && char.IsLower(message[0]) && 
+                message[0] != '[' && message[0] != '{' && message[0] != '(')
+            {
+                message = char.ToUpper(message[0]) + message.Substring(1);
+            }
+
+            return message;
         }
 
         private void WriteToFile(string content)
@@ -389,6 +492,7 @@ namespace IEVRModManager.Helpers
             public LogLevel Level { get; set; }
             public string Message { get; set; } = string.Empty;
             public Exception? Exception { get; set; }
+            public bool IsTechnical { get; set; }
         }
     }
 }

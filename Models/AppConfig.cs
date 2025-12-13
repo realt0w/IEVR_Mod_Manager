@@ -25,6 +25,7 @@ namespace IEVRModManager.Models
         private DateTime _lastCpkListCheckUtc = DateTime.MinValue;
         private DateTime _lastAppUpdateCheckUtc = DateTime.MinValue;
         private DateTime _lastModPrefetchUtc = DateTime.MinValue;
+        private bool _showTechnicalLogs = false;
 
         /// <summary>
         /// Gets or sets the path to the game directory.
@@ -153,6 +154,15 @@ namespace IEVRModManager.Models
         }
 
         /// <summary>
+        /// Gets or sets whether to show technical logs in the UI. When false, only user-friendly logs are shown.
+        /// </summary>
+        public bool ShowTechnicalLogs
+        {
+            get => _showTechnicalLogs;
+            set { _showTechnicalLogs = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>
         /// Gets or sets the list of mod data entries.
         /// </summary>
         public List<ModData> Mods { get; set; } = new List<ModData>();
@@ -179,6 +189,7 @@ namespace IEVRModManager.Models
                 LastCpkListCheckUtc = DateTime.MinValue,
                 LastAppUpdateCheckUtc = DateTime.MinValue,
                 LastModPrefetchUtc = DateTime.MinValue,
+                ShowTechnicalLogs = false,
                 Mods = new List<ModData>()
             };
         }

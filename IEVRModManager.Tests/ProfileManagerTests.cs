@@ -264,6 +264,22 @@ namespace IEVRModManager.Tests
             // Should use "Unnamed" as fallback
             var files = Directory.GetFiles(testProfilesDir, "*.json");
             Assert.NotEmpty(files);
+            
+            // Cleanup: Delete the profile created with empty name
+            try
+            {
+                // Try to delete using "Unnamed" since that's what the file is saved as
+                manager.DeleteProfile("Unnamed");
+            }
+            catch
+            {
+                // If that fails, try to delete the file directly
+                var unnamedFile = Path.Combine(testProfilesDir, "Unnamed.json");
+                if (File.Exists(unnamedFile))
+                {
+                    File.Delete(unnamedFile);
+                }
+            }
         }
 
         [Fact]

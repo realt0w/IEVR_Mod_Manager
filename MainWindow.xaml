@@ -163,14 +163,10 @@
 
                 <!-- Quick Actions -->
                 <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Stretch" Margin="0,10,0,10">
-                    <Button x:Name="ScanModsButton" Content="🔍 Scan Mods" Style="{StaticResource PrimaryButtonStyle}" 
-                            Padding="18,11"
-                            MinWidth="150"
-                            Click="ScanMods_Click" Margin="0,0,6,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
                     <Button x:Name="OpenModsFolderButton" Content="📂 Open Mods Folder" Style="{StaticResource PrimaryButtonStyle}" 
                             Padding="18,11"
                             MinWidth="170"
-                            Click="OpenModsFolder_Click" Margin="6,0,6,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                            Click="OpenModsFolder_Click" Margin="0,0,6,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
                     <Button x:Name="BrowseModsButton" Content="🧭 Browse mods" Style="{StaticResource PrimaryButtonStyle}" 
                             Padding="18,11"
                             MinWidth="150"
@@ -352,10 +348,9 @@
             </Grid>
         </GroupBox>
 
-        <!-- Bottom Frame: Downloads, Configuration, Exit -->
+        <!-- Bottom Frame: Configuration, Exit -->
         <Grid Grid.Row="3" Margin="16,0,16,16">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
@@ -369,49 +364,27 @@
                     Style="{StaticResource PrimaryButtonStyle}" 
                     Click="Configuration_Click" 
                     Width="190" Margin="0,0,8,0"/>
-            <Button x:Name="CheckForUpdatesButton" Grid.Column="1" 
+            <Button x:Name="ReportBugButton" Grid.Column="1" Content="🐛 Report Bug" 
                     Style="{StaticResource PrimaryButtonStyle}" 
-                    Click="CheckForUpdates_Click" 
-                    Width="160" Margin="0,0,8,0">
-                <StackPanel x:Name="CheckForUpdatesButtonContent" Orientation="Horizontal" HorizontalAlignment="Center">
-                    <Path Data="M12,4V1L8,5L12,9V6C15.31,6 18,8.69 18,12C18,15.31 15.31,18 12,18C8.69,18 6,15.31 6,12H4C4,16.42 7.58,20 12,20C16.42,20 20,16.42 20,12C20,7.58 16.42,4 12,4Z" 
-                          Fill="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}"
-                          Width="16" Height="16" 
-                          Stretch="Uniform"
-                          Margin="0,0,6,0"
-                          VerticalAlignment="Center"/>
-                    <TextBlock x:Name="CheckForUpdatesButtonText" 
-                               Text="Check for Updates"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            <Button x:Name="LinksButton" Grid.Column="2" Content="📥 Links" 
-                    Style="{StaticResource PrimaryButtonStyle}" 
-                    Click="Downloads_Click" 
-                    Width="190" Margin="0,0,8,0"/>
-            <TextBlock x:Name="HelpLink" Grid.Column="3" Text="📖 Help" 
+                    Click="ReportBug_Click" 
+                    Width="150" Margin="0,0,8,0"/>
+            <TextBlock x:Name="HelpLink" Grid.Column="4" Text="📖 Help" 
                        Foreground="{StaticResource AccentBrush}"
                        FontSize="13"
                        FontWeight="SemiBold"
                        Cursor="Hand"
                        VerticalAlignment="Center"
-                       Margin="0,0,0,0"
+                       Margin="8,0,8,0"
                        MouseEnter="HelpLink_MouseEnter"
                        MouseLeave="HelpLink_MouseLeave"
                        MouseLeftButtonDown="HelpLink_Click"/>
-            <Button x:Name="CopyLogButton" Grid.Column="5" Content="Copy Log" 
-                    Style="{StaticResource PrimaryButtonStyle}" 
-                    Padding="18,11"
-                    MinWidth="120"
-                    Click="CopyLog_Click" 
-                    Margin="8,0,8,0"/>
-            <Button x:Name="SaveLogButton" Grid.Column="6" Content="Save Log" 
+            <Button x:Name="SaveLogButton" Grid.Column="5" Content="Save Log" 
                     Style="{StaticResource PrimaryButtonStyle}" 
                     Padding="18,11"
                     MinWidth="120"
                     Click="SaveLog_Click" 
                     Margin="0,0,8,0"/>
-            <Button x:Name="ExitButton" Grid.Column="7" Content="✕ Exit" 
+            <Button x:Name="ExitButton" Grid.Column="6" Content="✕ Exit" 
                     Style="{StaticResource PrimaryButtonStyle}" 
                     Click="Exit_Click" 
                     Width="150"/>

@@ -40,9 +40,7 @@ namespace IEVRModManager
         private DispatcherTimer? _appUpdateCheckTimer;
         private bool _isCheckingUpdates;
         private bool _isCheckingAppUpdates;
-        private bool _vanillaSeedAttempted;
         private string? _previousProfileSelection;
-        private static readonly DateTime VanillaFallbackCutoffUtc = new DateTime(2025, 12, 7, 0, 0, 0, DateTimeKind.Utc);
         private static DateTime? _lastRateLimitHit;
         private static readonly TimeSpan RateLimitCooldown = TimeSpan.FromMinutes(5);
         
@@ -60,10 +58,16 @@ namespace IEVRModManager
             
             // Configure logger for UI output
             var logger = Helpers.Logger.Instance;
-            logger.SetUICallback((message, level) =>
+            logger.SetUICallback((message, level, isTechnical) =>
             {
                 Dispatcher.Invoke(() =>
                 {
+                    // Filter technical logs based on configuration
+                    if (isTechnical && !_config.ShowTechnicalLogs)
+                    {
+                        return; // Don't show technical logs if option is disabled
+                    }
+                    
                     var formattedMessage = $"{message}\n";
                     
                     // Limit log size to prevent memory issues
@@ -84,7 +88,7 @@ namespace IEVRModManager
             _configManager = new ConfigManager();
             _modManager = new ModManager();
             _lastInstallManager = new LastInstallManager();
-            _viola = new ViolaIntegration(message => logger.Info(message));
+            _viola = new ViolaIntegration(message => logger.Info(message, true));
             _profileManager = new Managers.ProfileManager();
             _modEntries = new ObservableCollection<ModEntryViewModel>();
             
@@ -189,8 +193,6 @@ namespace IEVRModManager
                 }
                 
                 // Update buttons
-                if (ScanModsButton != null)
-                    ScanModsButton.Content = LocalizationHelper.GetString("ScanMods");
                 if (OpenModsFolderButton != null)
                     OpenModsFolderButton.Content = LocalizationHelper.GetString("OpenModsFolder");
                 if (VersionLabel != null)
@@ -211,51 +213,16 @@ namespace IEVRModManager
                     DisableAllButton.Content = LocalizationHelper.GetString("DisableAll");
                 if (ConfigurationButton != null)
                     ConfigurationButton.Content = LocalizationHelper.GetString("Configuration");
-                if (LinksButton != null)
-                    LinksButton.Content = LocalizationHelper.GetString("Links");
                 if (HelpLink != null)
                     HelpLink.Text = LocalizationHelper.GetString("Help");
-                if (CopyLogButton != null)
-                    CopyLogButton.Content = LocalizationHelper.GetString("CopyLog");
+                if (ReportBugButton != null)
+                    ReportBugButton.Content = LocalizationHelper.GetString("ReportBug");
                 if (SaveLogButton != null)
                     SaveLogButton.Content = LocalizationHelper.GetString("SaveLog");
                 if (ExitButton != null)
                     ExitButton.Content = LocalizationHelper.GetString("Exit");
                 if (ManageProfilesButton != null)
                     ManageProfilesButton.Content = LocalizationHelper.GetString("ManageProfiles");
-                if (CheckForUpdatesButton != null)
-                {
-                    var stackPanel = new System.Windows.Controls.StackPanel
-                    {
-                        Orientation = System.Windows.Controls.Orientation.Horizontal,
-                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center
-                    };
-                    
-                    var iconPath = new System.Windows.Shapes.Path
-                    {
-                        Data = System.Windows.Media.Geometry.Parse("M12,4V1L8,5L12,9V6C15.31,6 18,8.69 18,12C18,15.31 15.31,18 12,18C8.69,18 6,15.31 6,12H4C4,16.42 7.58,20 12,20C16.42,20 20,16.42 20,12C20,7.58 16.42,4 12,4Z"),
-                        Width = 16,
-                        Height = 16,
-                        Stretch = System.Windows.Media.Stretch.Uniform,
-                        Margin = new System.Windows.Thickness(0, 0, 6, 0),
-                        VerticalAlignment = System.Windows.VerticalAlignment.Center
-                    };
-                    iconPath.SetBinding(System.Windows.Shapes.Shape.FillProperty, 
-                        new System.Windows.Data.Binding("Foreground") 
-                        { 
-                            RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(System.Windows.Controls.Button), 1) 
-                        });
-                    
-                    var textBlock = new System.Windows.Controls.TextBlock
-                    {
-                        Text = LocalizationHelper.GetString("CheckForUpdates"),
-                        VerticalAlignment = System.Windows.VerticalAlignment.Center
-                    };
-                    
-                    stackPanel.Children.Add(iconPath);
-                    stackPanel.Children.Add(textBlock);
-                    CheckForUpdatesButton.Content = stackPanel;
-                }
                 
                 System.Diagnostics.Debug.WriteLine("[Localization] Finished updating localized texts");
             }
@@ -396,7 +363,7 @@ namespace IEVRModManager
                         _config.SelectedCpkName = profile.SelectedCpkName;
                     }
                     
-                    Log($"Last applied profile '{profile.Name}' will be loaded on startup.", "info");
+                    Log($"Last applied profile '{profile.Name}' will be loaded on startup.", "info", true);
                 }
                 else
                 {
@@ -444,7 +411,7 @@ namespace IEVRModManager
                         RefreshCpkOptions();
                     }
                     
-                    Log($"Last applied profile '{profile.Name}' loaded on startup.", "info");
+                    Log($"Last applied profile '{profile.Name}' loaded on startup.", "info", true);
                 }
                 else
                 {
@@ -492,7 +459,7 @@ namespace IEVRModManager
             }
             catch (Exception ex)
             {
-                Log($"Error refreshing cpk list: {ex.Message}", "error");
+                Log($"Error refreshing cpk list: {ex.Message}", "error", true);
             }
         }
 
@@ -638,7 +605,7 @@ namespace IEVRModManager
             
             SaveConfig();
             RefreshProfileSelector();
-            Log($"Profile '{profile.Name}' loaded.", "info");
+            Log($"Profile '{profile.Name}' loaded.", "info", true);
         }
 
         private void SaveConfig()
@@ -739,7 +706,7 @@ namespace IEVRModManager
             if (_lastRateLimitHit.HasValue && DateTime.UtcNow - _lastRateLimitHit.Value < RateLimitCooldown)
             {
                 var waitMinutes = Math.Ceiling((RateLimitCooldown - (DateTime.UtcNow - _lastRateLimitHit.Value)).TotalMinutes);
-                Log($"Skipping cpk_list download - rate limit cooldown active. Wait {waitMinutes} more minutes.", "info");
+                Log($"Skipping cpk_list download - rate limit cooldown active. Wait {waitMinutes} more minutes.", "info", true);
                 System.Diagnostics.Debug.WriteLine($"[CpkDownload] Skipping due to rate limit cooldown (hit at {_lastRateLimitHit.Value:HH:mm:ss}, wait {waitMinutes} min)");
                 return 0;
             }
@@ -932,7 +899,7 @@ namespace IEVRModManager
 
             try
             {
-                Log("Fetching available cpk_list files from GitHub...", "info");
+                Log("Fetching available cpk_list files from GitHub...", "info", true);
                 var downloaded = await DownloadCpkFilesAsync();
                 if (downloaded > 0)
                 {
@@ -943,8 +910,6 @@ namespace IEVRModManager
                     Log("No new cpk_list files downloaded (they may already exist).", "info");
                 }
 
-                await EnsureInitialVanillaSeedAsync();
-                
                 // Ensure LatestCpkList.cfg.bin exists after downloading
                 await EnsureLatestCpkExistsAsync();
                 
@@ -957,7 +922,7 @@ namespace IEVRModManager
             }
             catch (Exception ex)
             {
-                Log($"Error downloading cpk_list files: {ex.Message}", "error");
+                Log($"Error downloading cpk_list files: {ex.Message}", "error", true);
                 // Don't update last check time on error, so it will retry sooner
             }
             finally
@@ -1097,7 +1062,7 @@ namespace IEVRModManager
             }
             catch (Exception ex)
             {
-                Log($"Could not open cpk folder: {ex.Message}", "error");
+                Log($"Could not open cpk folder: {ex.Message}", "error", true);
             }
         }
 
@@ -1233,7 +1198,7 @@ namespace IEVRModManager
             try
             {
                 SetApplyButtonEnabled(false);
-                Log("Restoring backup...", "info");
+                Log("Restoring backup...", "info", true);
 
                 await Task.Run(() =>
                 {
@@ -1371,7 +1336,7 @@ namespace IEVRModManager
                         }
                         catch (Exceptions.ModManagerException ex)
                         {
-                            Log($"Error saving last install info: {ex.Message}", "error");
+                            Log($"Error saving last install info: {ex.Message}", "error", true);
                         }
                     }
                     catch (Exception ex)
@@ -1393,7 +1358,7 @@ namespace IEVRModManager
                         return;
                     }
 
-                    Log($"Warning: {packsModifiers.Count} mod(s) will modify data/packs. User chose to continue.", "info");
+                    Log($"Warning: {packsModifiers.Count} mod(s) will modify data/packs. User chose to continue.", "info", true);
                 }
 
                 // Detect file conflicts before merging
@@ -1410,7 +1375,7 @@ namespace IEVRModManager
                         return;
                     }
                     
-                    Log($"Warning: {conflicts.Count} file conflict(s) detected. User chose to continue.", "info");
+                    Log($"Warning: {conflicts.Count} file conflict(s) detected. User chose to continue.", "info", true);
                 }
 
                 // Merge mods
@@ -1514,7 +1479,7 @@ namespace IEVRModManager
             try
             {
                 SetPlayLoadingState(true);
-                Log("Launching game...", "info");
+                Log("Launching game...", "info", true);
 
                 Process.Start(new ProcessStartInfo
                 {
@@ -1603,19 +1568,6 @@ namespace IEVRModManager
                 && string.Equals(currentCpkInfo, last.SelectedCpkInfo, StringComparison.Ordinal);
         }
 
-        private void CopyLog_Click(object sender, RoutedEventArgs e)
-        {
-            var logText = LogTextBox.Text ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(logText))
-            {
-                ShowInfo("LogIsEmpty");
-                return;
-            }
-
-            Clipboard.SetText(logText);
-            ShowSuccess("LogCopiedToClipboard");
-        }
-
         private void SaveLog_Click(object sender, RoutedEventArgs e)
         {
             var logText = LogTextBox.Text ?? string.Empty;
@@ -1657,11 +1609,11 @@ namespace IEVRModManager
                 if (showMessageOnExisting)
                 {
                     // User already confirmed, so delete the old backup and create a new one
-                    Log("Backup folder already exists; deleting old backup to create a new one.", "info");
+                    Log("Backup folder already exists; deleting old backup to create a new one.", "info", true);
                     try
                     {
                         Directory.Delete(backupRoot, true);
-                        Log("Old backup deleted successfully.", "info");
+                        Log("Old backup deleted successfully.", "info", true);
                     }
                     catch (Exception ex)
                     {
@@ -1673,14 +1625,14 @@ namespace IEVRModManager
                 else
                 {
                     // User hasn't confirmed yet, just skip
-                    Log("Backup folder already exists; skipping backup creation.", "info");
+                    Log("Backup folder already exists; skipping backup creation.", "info", true);
                     return true;
                 }
             }
 
             try
             {
-                Log("Creating backup...", "info");
+                Log("Creating backup...", "info", true);
                 await CreateBackupInternalAsync(gamePath, backupRoot);
                 Log($"Backup created successfully. Location: {backupRoot}", "success");
                 if (showMessageOnSuccess)
@@ -1725,7 +1677,7 @@ namespace IEVRModManager
             var dataPath = Path.Combine(gamePath, "data");
             if (!Directory.Exists(dataPath))
             {
-                Log("Game data folder not found; data backup skipped.", "error");
+                Log("Game data folder not found; data backup skipped.", "error", true);
                 return;
             }
 
@@ -1741,7 +1693,7 @@ namespace IEVRModManager
             }
             else
             {
-                Log($"{CpkListFileName} not found; it was not backed up.", "info");
+                Log($"{CpkListFileName} not found; it was not backed up.", "info", true);
             }
 
             var commonSource = Path.Combine(dataPath, "common");
@@ -1761,7 +1713,7 @@ namespace IEVRModManager
             var backupDataPath = Path.Combine(backupRoot, "data");
             if (!Directory.Exists(backupDataPath))
             {
-                Log("Backup data folder not found; skipping data restore.", "error");
+                Log("Backup data folder not found; skipping data restore.", "error", true);
                 return;
             }
 
@@ -1776,7 +1728,7 @@ namespace IEVRModManager
             }
             else
             {
-                Log($"No {CpkListFileName} found in backup.", "info");
+                Log($"No {CpkListFileName} found in backup.", "info", true);
             }
 
             var commonBackup = Path.Combine(backupDataPath, "common");
@@ -1791,7 +1743,7 @@ namespace IEVRModManager
             }
             else
             {
-                Log("No common folder found in backup.", "info");
+                Log("No common folder found in backup.", "info", true);
             }
         }
 
@@ -1822,7 +1774,7 @@ namespace IEVRModManager
                 
                 if (!success)
                 {
-                    Dispatcher.Invoke(() => Log("violacli returned error; aborting copy.", "error"));
+                    Dispatcher.Invoke(() => Log("violacli returned error; aborting copy.", "error", true));
                     progressCallback(0, LocalizationHelper.GetString("ErrorDuringMergeAborting"));
                     return;
                 }
@@ -1907,13 +1859,13 @@ namespace IEVRModManager
                 }
                 else
                 {
-                    Dispatcher.Invoke(() => Log("Failed to copy merged files.", "error"));
+                    Dispatcher.Invoke(() => Log("Failed to copy merged files.", "error", true));
                     progressCallback(0, LocalizationHelper.GetString("FailedToCopyMergedFiles"));
                 }
             }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() => Log($"Unexpected error: {ex.Message}", "error"));
+                Dispatcher.Invoke(() => Log($"Unexpected error: {ex.Message}", "error", true));
                 progressCallback(0, $"UnexpectedError:{ex.Message}");
             }
         }
@@ -1939,7 +1891,7 @@ namespace IEVRModManager
 
             if (!PathsMatch(previousInstall.GamePath, _config.GamePath))
             {
-                Dispatcher.Invoke(() => Log("Skipped cleanup: stored install points to a different game path.", "info"));
+                Dispatcher.Invoke(() => Log("Skipped cleanup: stored install points to a different game path.", "info", true));
                 return 0;
             }
 
@@ -1974,7 +1926,7 @@ namespace IEVRModManager
                 }
                 catch (Exception ex)
                 {
-                    Dispatcher.Invoke(() => Log($"Could not delete leftover file {relativePath}: {ex.Message}", "error"));
+                    Dispatcher.Invoke(() => Log($"Could not delete leftover file {relativePath}: {ex.Message}", "error", true));
                 }
             }
 
@@ -2050,6 +2002,15 @@ namespace IEVRModManager
             });
         }
 
+        private void ReportBug_Click(object sender, RoutedEventArgs e)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://gamebanana.com/tools/issues/21354",
+                UseShellExecute = true
+            });
+        }
+
         private void Downloads_Click(object sender, RoutedEventArgs e)
         {
             var window = new DownloadsWindow(this);
@@ -2084,6 +2045,7 @@ namespace IEVRModManager
                 TmpDir = _config.TmpDir,
                 Theme = _config.Theme,
                 Language = _config.Language,
+                ShowTechnicalLogs = _config.ShowTechnicalLogs,
                 Mods = _config.Mods
             };
             
@@ -2099,10 +2061,17 @@ namespace IEVRModManager
                     _config.ViolaCliPath = configCopy.ViolaCliPath;
                     _config.Theme = configCopy.Theme;
                     _config.Language = configCopy.Language;
+                    _config.ShowTechnicalLogs = configCopy.ShowTechnicalLogs;
                     SaveConfig();
                 },
                 RunCreateBackupFlowAsync,
-                RunRestoreBackupFlowAsync);
+                RunRestoreBackupFlowAsync,
+                async () => await CheckForAppUpdatesAsync(true),
+                () =>
+                {
+                    var window = new DownloadsWindow(this);
+                    window.ShowDialog();
+                });
             
             window.ShowDialog();
             
@@ -2112,6 +2081,7 @@ namespace IEVRModManager
             _config.SelectedCpkName = configCopy.SelectedCpkName;
             _config.ViolaCliPath = configCopy.ViolaCliPath;
             _config.Theme = configCopy.Theme;
+            _config.ShowTechnicalLogs = configCopy.ShowTechnicalLogs;
             
             // Check if language changed
             bool languageChanged = _config.Language != configCopy.Language;
@@ -2150,7 +2120,7 @@ namespace IEVRModManager
             Close();
         }
 
-        private void Log(string message, string level = "info")
+        private void Log(string message, string level = "info", bool isTechnical = false)
         {
             var logger = Helpers.Logger.Instance;
             var logLevel = level.ToLower() switch
@@ -2164,7 +2134,7 @@ namespace IEVRModManager
                 _ => LogLevel.Info
             };
             
-            logger.Log(logLevel, message);
+            logger.Log(logLevel, message, isTechnical);
         }
 
         // Helper methods for showing message windows
@@ -2223,12 +2193,6 @@ namespace IEVRModManager
                 return;
             }
 
-            // During the fixed 12h window we do NOT check for updates
-            if (IsFallbackWindowActive())
-            {
-                return;
-            }
-
             try
             {
                 var latestBuildId = await GetLatestSteamBuildIdAsync();
@@ -2252,7 +2216,7 @@ namespace IEVRModManager
                 }
                 else
                 {
-                    Log("Possible game update detected, but data/cpk_list.cfg.bin was not found.", "error");
+                    Log("Possible game update detected, but data/cpk_list.cfg.bin was not found.", "error", true);
                 }
 
                 if (!string.IsNullOrWhiteSpace(latestBuildId))
@@ -2279,7 +2243,7 @@ namespace IEVRModManager
             }
             catch (Exception ex)
             {
-                Log($"Could not check for game updates: {ex.Message}", "error");
+                Log($"Could not check for game updates: {ex.Message}", "error", true);
             }
         }
 
@@ -2362,56 +2326,14 @@ namespace IEVRModManager
 
                 var targetPath = Path.Combine(targetDir, LatestCpkListFileName);
 
-                var useFallback = IsFallbackWindowActive() && TryCopyFallbackVanilla(targetPath);
-                if (!useFallback)
-                {
-                    File.Copy(cpkPath, targetPath, true);
-                }
+                File.Copy(cpkPath, targetPath, true);
 
-                var sourceLabel = useFallback ? "bundled 1_4_2 cpk_list" : $"game data/{CpkListFileName}";
-                Log($"Detected game update{(string.IsNullOrWhiteSpace(latestBuildId) ? string.Empty : $" ({latestBuildId})")}. Copied {sourceLabel} to {LatestCpkListFileName}.", "success");
+                Log($"Detected game update{(string.IsNullOrWhiteSpace(latestBuildId) ? string.Empty : $" ({latestBuildId})")}. Copied game data/{CpkListFileName} to {LatestCpkListFileName}.", "success");
                 RefreshCpkOptions();
             }
             catch (Exception ex)
             {
-                Log($"Could not copy the updated {CpkListFileName}: {ex.Message}", "error");
-            }
-        }
-
-        private async Task EnsureInitialVanillaSeedAsync()
-        {
-            if (_vanillaSeedAttempted)
-            {
-                return;
-            }
-
-            _vanillaSeedAttempted = true;
-
-            if (!IsFallbackWindowActive())
-            {
-                return;
-            }
-
-            var targetDir = Config.SharedStorageCpkDir;
-            Directory.CreateDirectory(targetDir);
-            MigrateLegacyVanillaName(targetDir);
-            var targetPath = Path.Combine(targetDir, LatestCpkListFileName);
-
-            var source = ResolveDownloaded142Cpk() ?? ResolveBundled142Cpk();
-            if (string.IsNullOrWhiteSpace(source))
-            {
-                Log("Could not find 1_4_2_cpk_list.cfg.bin to seed Latest. It will be created from the game when available.", "error");
-                return;
-            }
-
-            try
-            {
-                File.Copy(source, targetPath, true);
-                Log("Seeded LatestCpkList.cfg.bin from 1_4_2_cpk_list.cfg.bin for the next 12 hours.", "success");
-            }
-            catch (Exception ex)
-            {
-                Log($"Could not seed LatestCpkList.cfg.bin from 1_4_2: {ex.Message}", "error");
+                Log($"Could not copy the updated {CpkListFileName}: {ex.Message}", "error", true);
             }
         }
 
@@ -2443,7 +2365,7 @@ namespace IEVRModManager
                     if (!string.IsNullOrWhiteSpace(source142) && File.Exists(source142))
                     {
                         File.Copy(source142, targetPath, true);
-                        Log("Created LatestCpkList.cfg.bin from 1_4_2_cpk_list.cfg.bin.", "info");
+                        Log("Created LatestCpkList.cfg.bin from 1_4_2_cpk_list.cfg.bin.", "info", true);
                         return;
                     }
                     return;
@@ -2452,11 +2374,11 @@ namespace IEVRModManager
                 // Use the most recent file
                 var mostRecent = cpkFiles.First();
                 File.Copy(mostRecent, targetPath, true);
-                Log($"Created LatestCpkList.cfg.bin from {Path.GetFileName(mostRecent)}.", "info");
+                Log($"Created LatestCpkList.cfg.bin from {Path.GetFileName(mostRecent)}.", "info", true);
             }
             catch (Exception ex)
             {
-                Log($"Could not create LatestCpkList.cfg.bin: {ex.Message}", "error");
+                Log($"Could not create LatestCpkList.cfg.bin: {ex.Message}", "error", true);
             }
         }
 
@@ -2474,12 +2396,12 @@ namespace IEVRModManager
                         File.Delete(latestPath);
                     }
                     File.Move(legacyPath, latestPath);
-                    Log($"Renamed {VanillaCpkListFileName} to {LatestCpkListFileName}.", "info");
+                    Log($"Renamed {VanillaCpkListFileName} to {LatestCpkListFileName}.", "info", true);
                 }
             }
             catch (Exception ex)
             {
-                Log($"Could not rename {VanillaCpkListFileName}: {ex.Message}", "error");
+                Log($"Could not rename {VanillaCpkListFileName}: {ex.Message}", "error", true);
             }
         }
 
@@ -2522,36 +2444,10 @@ namespace IEVRModManager
             }
         }
 
-        private bool TryCopyFallbackVanilla(string targetPath)
-        {
-            try
-            {
-                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                var fallbackPath = Path.Combine(baseDir, "cpk_list", "1_4_2_cpk_list.cfg.bin");
-                if (!File.Exists(fallbackPath))
-                {
-                    return false;
-                }
-
-                File.Copy(fallbackPath, targetPath, true);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Fallback vanilla copy failed: {ex.Message}");
-                return false;
-            }
-        }
-
         private static string ComputeGameSignature(string gamePath)
         {
             // Only rely on data/packs contents to avoid false positives
             return ComputePacksSignature(gamePath);
-        }
-
-        private static bool IsFallbackWindowActive()
-        {
-            return DateTime.UtcNow < VanillaFallbackCutoffUtc;
         }
 
         private static string GetCpkInfo(string? cpkPath)
@@ -2627,7 +2523,7 @@ namespace IEVRModManager
 
                 if (!string.Equals(payload, readBack, StringComparison.Ordinal))
                 {
-                    Log($"Could not verify read/write in {label}: content mismatch.", "error");
+                    Log($"Could not verify read/write in {label}: content mismatch.", "error", true);
                     return false;
                 }
 
@@ -2635,7 +2531,7 @@ namespace IEVRModManager
             }
             catch (Exception ex)
             {
-                Log($"Could not access {label}: {ex.Message}", "error");
+                Log($"Could not access {label}: {ex.Message}", "error", true);
                 return false;
             }
         }
@@ -2693,18 +2589,18 @@ namespace IEVRModManager
                 {
                     var timeSinceLastCheck = DateTime.UtcNow - lastCheck;
                     var lastCheckInfo = $"{timeSinceLastCheck.TotalMinutes:F1} minutes ago";
-                    Log($"[AppUpdate] Last check was at: {lastCheck:yyyy-MM-dd HH:mm:ss} UTC ({lastCheckInfo})", "info");
+                    Log($"[AppUpdate] Last check was at: {lastCheck:yyyy-MM-dd HH:mm:ss} UTC ({lastCheckInfo})", "info", true);
                     
                     if (timeSinceLastCheck.TotalHours < 1.0)
                     {
                         var minutesRemaining = Math.Ceiling(60 - timeSinceLastCheck.TotalMinutes);
-                        Log($"[AppUpdate] Skipping automatic check - last check was {timeSinceLastCheck.TotalMinutes:F1} minutes ago. Next check in {minutesRemaining} minutes.", "info");
+                        Log($"[AppUpdate] Skipping automatic check - last check was {timeSinceLastCheck.TotalMinutes:F1} minutes ago. Next check in {minutesRemaining} minutes.", "info", true);
                         return;
                     }
                 }
                 else
                 {
-                    Log($"[AppUpdate] Last check was never (or invalid). Proceeding with check.", "info");
+                    Log($"[AppUpdate] Last check was never (or invalid). Proceeding with check.", "info", true);
                 }
             }
 
@@ -2713,7 +2609,7 @@ namespace IEVRModManager
             {
                 System.Diagnostics.Debug.WriteLine("[AppUpdate] Starting update check");
                 var currentVersion = Managers.AppUpdateManager.GetCurrentVersion();
-                Log($"Current version: {currentVersion}", "info");
+                Log($"Current version: {currentVersion}", "info", true);
                 
                 var releaseInfo = await Managers.AppUpdateManager.CheckForUpdatesAsync();
 
@@ -2721,14 +2617,14 @@ namespace IEVRModManager
                 var checkTime = DateTime.UtcNow;
                 _config.LastAppUpdateCheckUtc = checkTime;
                 _configManager.UpdateLastAppUpdateCheckUtc(checkTime);
-                Log($"[AppUpdate] Saved check time: {checkTime:yyyy-MM-dd HH:mm:ss} UTC", "info");
+                Log($"[AppUpdate] Saved check time: {checkTime:yyyy-MM-dd HH:mm:ss} UTC", "info", true);
                 
                 // Reload config to keep in-memory config in sync
                 _config = _configManager.Load();
 
                 if (releaseInfo == null)
                 {
-                    Log("No release info found from GitHub API", "error");
+                    Log("No release info found from GitHub API", "error", true);
                     if (showNoUpdateMessage)
                     {
                         ShowError("UpdateCheckFailed");
@@ -2737,10 +2633,10 @@ namespace IEVRModManager
                 }
 
                 var latestVersion = releaseInfo.TagName.TrimStart('v', 'V');
-                Log($"Latest version from GitHub: {releaseInfo.TagName} (parsed as: {latestVersion})", "info");
+                Log($"Latest version from GitHub: {releaseInfo.TagName} (parsed as: {latestVersion})", "info", true);
                 
                 var isNewer = Managers.AppUpdateManager.IsNewerVersion(currentVersion, latestVersion);
-                Log($"Is newer version? {isNewer} (current: {currentVersion}, latest: {latestVersion})", "info");
+                Log($"Is newer version? {isNewer} (current: {currentVersion}, latest: {latestVersion})", "info", true);
 
                 if (isNewer)
                 {
@@ -2757,8 +2653,8 @@ namespace IEVRModManager
             }
             catch (Exception ex)
             {
-                Log($"Error checking for app updates: {ex.Message}", "error");
-                Log($"Stack trace: {ex.StackTrace}", "error");
+                Log($"Error checking for app updates: {ex.Message}", "error", true);
+                Log($"Stack trace: {ex.StackTrace}", "error", true);
                 if (showNoUpdateMessage)
                 {
                     ShowError("UpdateCheckFailed");
@@ -2807,7 +2703,7 @@ namespace IEVRModManager
                 return;
             }
 
-            Log(LocalizationHelper.GetString("CheckingForUpdates"), "info");
+            Log(LocalizationHelper.GetString("CheckingForUpdates"), "info", true);
             await CheckForAppUpdatesAsync(true);
         }
 

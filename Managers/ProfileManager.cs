@@ -45,6 +45,15 @@ namespace IEVRModManager.Managers
             return Directory.GetFiles(_profilesDir, "*.json")
                 .Select(LoadProfileFromFile)
                 .Where(profile => profile != null)
+                .Select(profile =>
+                {
+                    // Normalize empty or whitespace-only names to "Unnamed"
+                    if (string.IsNullOrWhiteSpace(profile!.Name))
+                    {
+                        profile.Name = "Unnamed";
+                    }
+                    return profile;
+                })
                 .OrderByDescending(p => p!.LastModifiedDate)
                 .ToList()!;
         }
@@ -77,17 +86,17 @@ namespace IEVRModManager.Managers
             }
             catch (JsonException ex)
             {
-                Instance.Log(LogLevel.Warning, $"Error parsing profile JSON {filePath}", ex);
+                Instance.Log(LogLevel.Warning, $"Error parsing profile JSON {filePath}", true, ex);
                 return null;
             }
             catch (IOException ex)
             {
-                Instance.Log(LogLevel.Warning, $"IO error loading profile {filePath}", ex);
+                Instance.Log(LogLevel.Warning, $"IO error loading profile {filePath}", true, ex);
                 return null;
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Warning, $"Unexpected error loading profile {filePath}", ex);
+                Instance.Log(LogLevel.Warning, $"Unexpected error loading profile {filePath}", true, ex);
                 return null;
             }
         }
@@ -142,17 +151,17 @@ namespace IEVRModManager.Managers
             }
             catch (IOException ex)
             {
-                Instance.Log(LogLevel.Error, "IO error saving profile", ex);
+                Instance.Log(LogLevel.Error, "IO error saving profile", true, ex);
                 throw new ModManagerException("Failed to save profile. Check file permissions.", ex);
             }
             catch (UnauthorizedAccessException ex)
             {
-                Instance.Log(LogLevel.Error, "Access denied saving profile", ex);
+                Instance.Log(LogLevel.Error, "Access denied saving profile", true, ex);
                 throw new ModManagerException("Access denied to profile directory.", ex);
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Error, "Unexpected error saving profile", ex);
+                Instance.Log(LogLevel.Error, "Unexpected error saving profile", true, ex);
                 throw new ModManagerException("An unexpected error occurred while saving profile.", ex);
             }
         }
@@ -216,17 +225,17 @@ namespace IEVRModManager.Managers
             }
             catch (IOException ex)
             {
-                Instance.Log(LogLevel.Error, $"IO error deleting profile {profileName}", ex);
+                Instance.Log(LogLevel.Error, $"IO error deleting profile {profileName}", true, ex);
                 throw new ModManagerException($"Failed to delete profile '{profileName}'. The file may be in use.", ex);
             }
             catch (UnauthorizedAccessException ex)
             {
-                Instance.Log(LogLevel.Error, $"Access denied deleting profile {profileName}", ex);
+                Instance.Log(LogLevel.Error, $"Access denied deleting profile {profileName}", true, ex);
                 throw new ModManagerException($"Access denied to delete profile '{profileName}'.", ex);
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Error, $"Unexpected error deleting profile {profileName}", ex);
+                Instance.Log(LogLevel.Error, $"Unexpected error deleting profile {profileName}", true, ex);
                 throw new ModManagerException($"An unexpected error occurred while deleting profile '{profileName}'.", ex);
             }
         }

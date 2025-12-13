@@ -11,8 +11,6 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0"
@@ -32,42 +30,31 @@
                            Foreground="{StaticResource TextBrush}"
                            Margin="0,0,0,12"/>
                 
-                <TextBlock x:Name="ReleaseNotesText"
+                <TextBlock x:Name="ReleaseNotesLabel"
                            TextWrapping="Wrap"
                            Foreground="{StaticResource TextBrush}"
-                           FontSize="11"
-                           Margin="0,8,0,0"
+                           FontSize="12"
+                           FontWeight="Bold"
+                           Margin="0,8,0,4"
                            Visibility="Collapsed"/>
+                
+                <FlowDocumentScrollViewer x:Name="ReleaseNotesViewer"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Disabled"
+                                         Margin="0,0,0,0"
+                                         Visibility="Collapsed"
+                                         Background="Transparent"
+                                         BorderThickness="0"/>
             </StackPanel>
         </ScrollViewer>
 
-        <ProgressBar x:Name="ProgressBar"
-                     Grid.Row="2"
-                     Height="20"
-                     Margin="0,0,0,12"
-                     Visibility="Collapsed"/>
-
-        <TextBlock x:Name="ProgressText"
-                   Grid.Row="3"
-                   TextWrapping="Wrap"
-                   Foreground="{StaticResource TextBrush}"
-                   FontSize="11"
-                   Margin="0,0,0,16"
-                   Visibility="Collapsed"/>
-
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="DownloadButton"
-                    Content="Download and Install"
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="OpenGameBananaButton"
+                    Content="Open GameBanana Page"
                     Style="{StaticResource PrimaryButtonStyle}"
-                    Width="180"
+                    Width="200"
                     Margin="0,0,8,0"
-                    Click="DownloadButton_Click"/>
-            <Button x:Name="OpenReleasesButton"
-                    Content="Open Releases Page"
-                    Style="{StaticResource PrimaryButtonStyle}"
-                    Width="160"
-                    Margin="0,0,8,0"
-                    Click="OpenReleasesButton_Click"/>
+                    Click="OpenGameBananaButton_Click"/>
             <Button x:Name="LaterButton"
                     Content="Later"
                     Style="{StaticResource PrimaryButtonStyle}"

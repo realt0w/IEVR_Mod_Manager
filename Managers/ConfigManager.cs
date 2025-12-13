@@ -52,29 +52,33 @@ namespace IEVRModManager.Managers
                 
                 if (config == null)
                 {
-                    return AppConfig.Default();
+                    var defaultConfig = AppConfig.Default();
+                    TryDetectGamePathFromSteam(defaultConfig);
+                    return defaultConfig;
                 }
 
-                return MigrateConfig(config, json);
+                var migratedConfig = MigrateConfig(config, json);
+                TryDetectGamePathFromSteam(migratedConfig);
+                return migratedConfig;
             }
             catch (JsonException ex)
             {
-                Instance.Log(LogLevel.Error, "Error parsing config JSON", ex);
+                Instance.Log(LogLevel.Error, "Error parsing config JSON", true, ex);
                 throw new ConfigurationException("Failed to parse configuration file. The file may be corrupted.", ex);
             }
             catch (IOException ex)
             {
-                Instance.Log(LogLevel.Error, "IO error loading config", ex);
+                Instance.Log(LogLevel.Error, "IO error loading config", true, ex);
                 throw new ConfigurationException("Failed to read configuration file. Check file permissions.", ex);
             }
             catch (UnauthorizedAccessException ex)
             {
-                Instance.Log(LogLevel.Error, "Access denied loading config", ex);
+                Instance.Log(LogLevel.Error, "Access denied loading config", true, ex);
                 throw new ConfigurationException("Access denied to configuration file.", ex);
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Error, "Unexpected error loading config", ex);
+                Instance.Log(LogLevel.Error, "Unexpected error loading config", true, ex);
                 throw new ConfigurationException("An unexpected error occurred while loading configuration.", ex);
             }
         }
@@ -115,6 +119,8 @@ namespace IEVRModManager.Managers
                 value => loadedConfig.LastAppUpdateCheckUtc = value, defaultConfig.LastAppUpdateCheckUtc);
             migrated |= MigrateDateTimeProperty(root, "LastModPrefetchUtc", () => loadedConfig.LastModPrefetchUtc, 
                 value => loadedConfig.LastModPrefetchUtc = value, defaultConfig.LastModPrefetchUtc);
+            migrated |= MigrateBooleanProperty(root, "ShowTechnicalLogs", () => loadedConfig.ShowTechnicalLogs, 
+                value => loadedConfig.ShowTechnicalLogs = value, defaultConfig.ShowTechnicalLogs);
 
             if (!root.TryGetProperty("Mods", out _) || loadedConfig.Mods == null)
             {
@@ -174,6 +180,16 @@ namespace IEVRModManager.Managers
             return false;
         }
 
+        private bool MigrateBooleanProperty(JsonElement root, string propertyName, Func<bool> getter, Action<bool> setter, bool defaultValue)
+        {
+            if (!root.TryGetProperty(propertyName, out _))
+            {
+                setter(defaultValue);
+                return true;
+            }
+            return false;
+        }
+
         private void SaveMigratedConfig(AppConfig config)
         {
             try
@@ -186,11 +202,11 @@ namespace IEVRModManager.Managers
 
                 var json = JsonSerializer.Serialize(config, options);
                 File.WriteAllText(_configPath, json);
-                Instance.Debug("Configuration migrated and saved successfully.");
+                Instance.Debug("Configuration migrated and saved successfully.", true);
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Warning, "Error saving migrated config", ex);
+                Instance.Log(LogLevel.Warning, "Error saving migrated config", true, ex);
             }
         }
 
@@ -227,17 +243,17 @@ namespace IEVRModManager.Managers
             }
             catch (IOException ex)
             {
-                Instance.Log(LogLevel.Error, "IO error saving config", ex);
+                Instance.Log(LogLevel.Error, "IO error saving config", true, ex);
                 throw new ConfigurationException("Failed to write configuration file. Check file permissions.", ex);
             }
             catch (UnauthorizedAccessException ex)
             {
-                Instance.Log(LogLevel.Error, "Access denied saving config", ex);
+                Instance.Log(LogLevel.Error, "Access denied saving config", true, ex);
                 throw new ConfigurationException("Access denied to configuration file.", ex);
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Error, "Unexpected error saving config", ex);
+                Instance.Log(LogLevel.Error, "Unexpected error saving config", true, ex);
                 throw new ConfigurationException("An unexpected error occurred while saving configuration.", ex);
             }
         }
@@ -297,17 +313,17 @@ namespace IEVRModManager.Managers
             }
             catch (IOException ex)
             {
-                Instance.Log(LogLevel.Error, "IO error saving config", ex);
+                Instance.Log(LogLevel.Error, "IO error saving config", true, ex);
                 throw new ConfigurationException("Failed to write configuration file. Check file permissions.", ex);
             }
             catch (UnauthorizedAccessException ex)
             {
-                Instance.Log(LogLevel.Error, "Access denied saving config", ex);
+                Instance.Log(LogLevel.Error, "Access denied saving config", true, ex);
                 throw new ConfigurationException("Access denied to configuration file.", ex);
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Error, "Unexpected error saving config", ex);
+                Instance.Log(LogLevel.Error, "Unexpected error saving config", true, ex);
                 throw new ConfigurationException("An unexpected error occurred while saving configuration.", ex);
             }
         }
@@ -373,17 +389,17 @@ namespace IEVRModManager.Managers
                     if (jsonDoc.RootElement.TryGetProperty("LastAppUpdateCheckUtc", out var prop))
                     {
                         var savedValue = prop.GetDateTime();
-                        Instance.Debug($"Updated LastAppUpdateCheckUtc from {oldValue:yyyy-MM-dd HH:mm:ss} UTC to {checkTime:yyyy-MM-dd HH:mm:ss} UTC. File contains: {savedValue:yyyy-MM-dd HH:mm:ss} UTC");
+                        Instance.Debug($"Updated LastAppUpdateCheckUtc from {oldValue:yyyy-MM-dd HH:mm:ss} UTC to {checkTime:yyyy-MM-dd HH:mm:ss} UTC. File contains: {savedValue:yyyy-MM-dd HH:mm:ss} UTC", true);
                     }
                     else
                     {
-                        Instance.Warning("LastAppUpdateCheckUtc property not found in saved config file!");
+                        Instance.Warning("LastAppUpdateCheckUtc property not found in saved config file!", true);
                     }
                 }
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Warning, "Error updating LastAppUpdateCheckUtc", ex);
+                Instance.Log(LogLevel.Warning, "Error updating LastAppUpdateCheckUtc", true, ex);
             }
         }
 
@@ -401,7 +417,49 @@ namespace IEVRModManager.Managers
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Warning, "Error updating LastModPrefetchUtc", ex);
+                Instance.Log(LogLevel.Warning, "Error updating LastModPrefetchUtc", true, ex);
+            }
+        }
+
+        /// <summary>
+        /// Attempts to detect the game path from Steam if it's not already configured.
+        /// </summary>
+        /// <param name="config">The configuration object to update.</param>
+        private void TryDetectGamePathFromSteam(AppConfig config)
+        {
+            if (config == null)
+            {
+                return;
+            }
+
+            // Only detect if GamePath is empty or invalid
+            if (!string.IsNullOrWhiteSpace(config.GamePath) && Directory.Exists(config.GamePath))
+            {
+                return;
+            }
+
+            try
+            {
+                var detectedPath = SteamHelper.DetectGamePath();
+                if (!string.IsNullOrWhiteSpace(detectedPath) && Directory.Exists(detectedPath))
+                {
+                    config.GamePath = detectedPath;
+                    Instance.Info($"Auto-detected game path from Steam: {detectedPath}", true);
+                    
+                    // Save the detected path immediately
+                    try
+                    {
+                        SaveConfigToFile(config);
+                    }
+                    catch (Exception ex)
+                    {
+                        Instance.Log(LogLevel.Warning, "Error saving auto-detected game path", true, ex);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Instance.Log(LogLevel.Debug, "Error detecting game path from Steam", true, ex);
             }
         }
 

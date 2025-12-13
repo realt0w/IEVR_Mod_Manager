@@ -312,6 +312,22 @@ namespace IEVRModManager.Tests
             // Assert
             var files = Directory.GetFiles(manager.GetProfilesDir(), "*.json");
             Assert.Contains(files, f => Path.GetFileName(f).StartsWith("Unnamed"));
+            
+            // Cleanup: Delete the profile created with whitespace-only name
+            try
+            {
+                // Try to delete using "Unnamed" since that's what the file is saved as
+                manager.DeleteProfile("Unnamed");
+            }
+            catch
+            {
+                // If that fails, try to delete the file directly
+                var unnamedFile = Path.Combine(manager.GetProfilesDir(), "Unnamed.json");
+                if (File.Exists(unnamedFile))
+                {
+                    File.Delete(unnamedFile);
+                }
+            }
         }
 
         [Fact]

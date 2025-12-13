@@ -39,7 +39,7 @@ namespace IEVRModManager
             
             ApplyLanguage();
             ApplyTheme();
-            logger.Info("App starting.");
+            logger.Info("App starting.", true);
             base.OnStartup(e);
         }
 
@@ -50,21 +50,21 @@ namespace IEVRModManager
                 var configManager = new Managers.ConfigManager();
                 var config = configManager.Load();
                 string language = string.IsNullOrWhiteSpace(config.Language) ? "System" : config.Language;
-                Helpers.Logger.Instance.Info($"Applying language: {language}");
+                Helpers.Logger.Instance.Info($"Applying language: {language}", true);
                 Helpers.LocalizationHelper.SetLanguage(language);
                 
                 var testString = Helpers.LocalizationHelper.GetString("AppTitle");
-                Helpers.Logger.Instance.Debug($"Test string 'AppTitle' = '{testString}'");
+                Helpers.Logger.Instance.Debug($"Test string 'AppTitle' = '{testString}'", true);
             }
             catch (Exceptions.ConfigurationException ex)
             {
-                Helpers.Logger.Instance.Error("Configuration error while applying language");
-                Helpers.Logger.Instance.Log(LogLevel.Error, "Configuration error details", ex);
+                Helpers.Logger.Instance.Error("Configuration error while applying language", true);
+                Helpers.Logger.Instance.Log(LogLevel.Error, "Configuration error details", true, ex);
             }
             catch (Exception ex)
             {
-                Helpers.Logger.Instance.Error("Error applying language");
-                Helpers.Logger.Instance.Log(LogLevel.Error, "Error details", ex);
+                Helpers.Logger.Instance.Error("Error applying language", true);
+                Helpers.Logger.Instance.Log(LogLevel.Error, "Error details", true, ex);
             }
         }
 
@@ -84,8 +84,8 @@ namespace IEVRModManager
             }
             catch (Exception ex)
             {
-                Helpers.Logger.Instance.Error("Error applying theme");
-                Helpers.Logger.Instance.Log(LogLevel.Error, "Error details", ex);
+                Helpers.Logger.Instance.Error("Error applying theme", true);
+                Helpers.Logger.Instance.Log(LogLevel.Error, "Error details", true, ex);
                 ApplyThemeResource("Dark");
             }
         }
@@ -127,20 +127,20 @@ namespace IEVRModManager
 
         private static void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
-            Helpers.Logger.Instance.Log(LogLevel.Error, "Dispatcher exception", e.Exception);
+            Helpers.Logger.Instance.Log(LogLevel.Error, "Dispatcher exception", true, e.Exception);
             MessageBox.Show($"Unhandled error:\n{e.Exception.Message}", "IEVR Mod Manager", MessageBoxButton.OK, MessageBoxImage.Error);
             e.Handled = true;
         }
 
         private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
-            Helpers.Logger.Instance.Log(LogLevel.Error, "Domain unhandled exception", e.ExceptionObject as Exception);
+            Helpers.Logger.Instance.Log(LogLevel.Error, "Domain unhandled exception", true, e.ExceptionObject as Exception);
             MessageBox.Show("Unhandled error. See app.log in AppData.", "IEVR Mod Manager", MessageBoxButton.OK, MessageBoxImage.Error);
         }
 
         private static void OnUnobservedTaskException(object? sender, System.Threading.Tasks.UnobservedTaskExceptionEventArgs e)
         {
-            Helpers.Logger.Instance.Log(LogLevel.Error, "Task unobserved exception", e.Exception);
+            Helpers.Logger.Instance.Log(LogLevel.Error, "Task unobserved exception", true, e.Exception);
             e.SetObserved();
         }
 
@@ -153,7 +153,7 @@ namespace IEVRModManager
             }
             catch (Exception ex)
             {
-                Helpers.Logger.Instance.Log(LogLevel.Error, "Failed to ensure base directory", ex);
+                Helpers.Logger.Instance.Log(LogLevel.Error, "Failed to ensure base directory", true, ex);
             }
         }
 

@@ -18,6 +18,8 @@ namespace IEVRModManager.Windows
         private System.Action _saveCallback;
         private readonly Func<Task> _createBackupAction;
         private readonly Func<Task> _restoreBackupAction;
+        private readonly Func<Task> _checkForUpdatesAction;
+        private readonly System.Action _openDownloadsAction;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConfigPathsWindow"/> class.
@@ -27,7 +29,9 @@ namespace IEVRModManager.Windows
         /// <param name="saveCallback">Callback to execute when configuration is saved.</param>
         /// <param name="createBackupAction">Action to create a backup.</param>
         /// <param name="restoreBackupAction">Action to restore from a backup.</param>
-        public ConfigPathsWindow(Window parent, AppConfig config, System.Action saveCallback, Func<Task> createBackupAction, Func<Task> restoreBackupAction)
+        /// <param name="checkForUpdatesAction">Action to check for updates.</param>
+        /// <param name="openDownloadsAction">Action to open downloads window.</param>
+        public ConfigPathsWindow(Window parent, AppConfig config, System.Action saveCallback, Func<Task> createBackupAction, Func<Task> restoreBackupAction, Func<Task> checkForUpdatesAction, System.Action openDownloadsAction)
         {
             InitializeComponent();
             Owner = parent;
@@ -36,14 +40,28 @@ namespace IEVRModManager.Windows
             _saveCallback = saveCallback;
             _createBackupAction = createBackupAction;
             _restoreBackupAction = restoreBackupAction;
+            _checkForUpdatesAction = checkForUpdatesAction;
+            _openDownloadsAction = openDownloadsAction;
             
             DataContext = _config;
             
             // Update localized texts
             UpdateLocalizedTexts();
             
+            // Try to detect game path from Steam if not configured
+            if (string.IsNullOrWhiteSpace(_config.GamePath) || !Directory.Exists(_config.GamePath))
+            {
+                TryDetectGamePathFromSteam();
+            }
+            
             // Ensure initial values are displayed correctly
             GamePathTextBox.Text = _config.GamePath ?? string.Empty;
+            
+            // Set up technical logs toggle
+            if (ShowTechnicalLogsToggle != null)
+            {
+                ShowTechnicalLogsToggle.IsChecked = _config.ShowTechnicalLogs;
+            }
             
             // Set up language combo box
             if (LanguageComboBox != null)
@@ -193,8 +211,20 @@ namespace IEVRModManager.Windows
             OpenViolaStorageButton.Content = LocalizationHelper.GetString("OpenFolder");
             LanguageLabel.Content = LocalizationHelper.GetString("LanguageLabel");
             ThemeLabel.Content = LocalizationHelper.GetString("ThemeLabel");
+            if (ShowTechnicalLogsLabel != null)
+            {
+                ShowTechnicalLogsLabel.Content = LocalizationHelper.GetString("ShowTechnicalLogs");
+            }
+            if (ShowTechnicalLogsDescription != null)
+            {
+                ShowTechnicalLogsDescription.Text = LocalizationHelper.GetString("ShowTechnicalLogsDescription");
+            }
             CreateBackupButton.Content = LocalizationHelper.GetString("CreateBackup");
             RestoreBackupButton.Content = LocalizationHelper.GetString("RestoreBackup");
+            if (CheckForUpdatesButtonText != null)
+                CheckForUpdatesButtonText.Text = LocalizationHelper.GetString("CheckForUpdates");
+            if (LinksButton != null)
+                LinksButton.Content = LocalizationHelper.GetString("Links");
             CloseButton.Content = LocalizationHelper.GetString("Close");
             
             // Update combo box items
@@ -225,10 +255,23 @@ namespace IEVRModManager.Windows
             }
         }
 
+        private void ShowTechnicalLogsToggle_Changed(object sender, RoutedEventArgs e)
+        {
+            if (ShowTechnicalLogsToggle != null)
+            {
+                _config.ShowTechnicalLogs = ShowTechnicalLogsToggle.IsChecked ?? false;
+                _saveCallback?.Invoke();
+            }
+        }
+
         private void Close_Click(object sender, RoutedEventArgs e)
         {
             // Save current values before closing
             _config.GamePath = GamePathTextBox.Text;
+            if (ShowTechnicalLogsToggle != null)
+            {
+                _config.ShowTechnicalLogs = ShowTechnicalLogsToggle.IsChecked ?? false;
+            }
             _saveCallback?.Invoke();
             Close();
         }
@@ -309,6 +352,58 @@ namespace IEVRModManager.Windows
                     string.Format(LocalizationHelper.GetString("ErrorRestoringBackup"), ex.Message), 
                     MessageType.Error);
                 errorWindow.ShowDialog();
+            }
+        }
+
+        private async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
+        {
+            if (_checkForUpdatesAction == null)
+            {
+                return;
+            }
+
+            try
+            {
+                await _checkForUpdatesAction.Invoke();
+            }
+            catch (Exception ex)
+            {
+                var errorWindow = new MessageWindow(this, 
+                    LocalizationHelper.GetString("ErrorTitle"), 
+                    string.Format(LocalizationHelper.GetString("UpdateCheckFailed"), ex.Message), 
+                    MessageType.Error);
+                errorWindow.ShowDialog();
+            }
+        }
+
+        private void Links_Click(object sender, RoutedEventArgs e)
+        {
+            _openDownloadsAction?.Invoke();
+        }
+
+        private void TryDetectGamePathFromSteam()
+        {
+            try
+            {
+                var detectedPath = Helpers.SteamHelper.DetectGamePath();
+                if (!string.IsNullOrWhiteSpace(detectedPath) && Directory.Exists(detectedPath))
+                {
+                    _config.GamePath = detectedPath;
+                    GamePathTextBox.Text = detectedPath;
+                    _saveCallback?.Invoke();
+                    
+                    var message = string.Format(LocalizationHelper.GetString("GamePathDetectedFromSteam"), detectedPath);
+                    var messageWindow = new MessageWindow(this, 
+                        LocalizationHelper.GetString("InfoTitle"), 
+                        message, 
+                        MessageType.Info);
+                    messageWindow.ShowDialog();
+                }
+            }
+            catch (Exception ex)
+            {
+                // Silently fail - user can still manually set the path
+                System.Diagnostics.Debug.WriteLine($"Error detecting game path from Steam: {ex.Message}");
             }
         }
     }

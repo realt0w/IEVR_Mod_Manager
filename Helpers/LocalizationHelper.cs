@@ -48,7 +48,7 @@ namespace IEVRModManager.Helpers
                 }
                 catch (Exception ex)
                 {
-                    Instance.Log(LogLevel.Warning, "Error loading localization files", ex);
+                    Instance.Log(LogLevel.Warning, "Error loading localization files", true, ex);
                     _allStrings["en-US"] = new Dictionary<string, string>();
                 }
             }
@@ -170,7 +170,7 @@ namespace IEVRModManager.Helpers
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Warning, $"Error loading embedded resource '{resourceName}'", ex);
+                Instance.Log(LogLevel.Warning, $"Error loading embedded resource '{resourceName}'", true, ex);
                 return null;
             }
         }
@@ -209,7 +209,7 @@ namespace IEVRModManager.Helpers
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Warning, $"Error loading YAML file {filePath}", ex);
+                Instance.Log(LogLevel.Warning, $"Error loading YAML file {filePath}", true, ex);
                 return new Dictionary<string, string>();
             }
         }
@@ -233,7 +233,7 @@ namespace IEVRModManager.Helpers
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Warning, "Error in SetLanguage", ex);
+                Instance.Log(LogLevel.Warning, "Error in SetLanguage", true, ex);
                 _currentCulture = CultureInfo.CurrentUICulture;
                 lock (_lockObject)
                 {
@@ -323,7 +323,7 @@ namespace IEVRModManager.Helpers
             }
             catch (Exception ex)
             {
-                Instance.Log(LogLevel.Warning, $"Error in GetString('{key}')", ex);
+                Instance.Log(LogLevel.Warning, $"Error in GetString('{key}')", true, ex);
                 return key;
             }
         }
